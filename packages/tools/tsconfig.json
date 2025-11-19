@@ -1,0 +1,10 @@
+{
+  "extends": "@aiagent/tsconfig/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "module": "CommonJS",
+    "moduleResolution": "Node"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}

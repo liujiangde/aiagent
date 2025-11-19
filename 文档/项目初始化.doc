@@ -1,0 +1,52 @@
+创建过程概览
+
+- 初始化工作区与任务编排：在根目录声明工作区与脚本，统一管理应用与包 package.json:5-13
+- 引入任务编排器：使用 Turborepo 定义 dev/build/lint 流水线与缓存策略 turbo.json:1-15
+- 创建前端应用：在 apps/web 下搭建 Next.js，提供 dev/build/start/lint 脚本 apps/web/package.json:5-10
+- 创建共享包：
+  - 公共 TypeScript 配置包 packages/tsconfig/tsconfig.json:1-15
+  - 公共 ESLint 配置包（base 规则） packages/eslint-config/base.json:1-13
+  - UI 组件包（示例 Button ） packages/ui/src/lib/Button.tsx:1-18
+- 关联应用与包：Next.js 启用跨包编译与路径映射以直接消费源码
+  - 跨包编译设置 apps/web/next.config.js:1-3
+  - TS 路径映射到 UI 源码 apps/web/tsconfig.json:5-9
+  - 页面直接引入共享组件 apps/web/app/page.tsx:3,20
+关键配置与作用
+
+- 根 package.json
+  - workspaces : 声明工作区路径，启用包间链接与统一安装 package.json:5-8
+  - scripts : 用 turbo run 统一编排各子包的 dev/build/lint package.json:9-13
+  - devDependencies : 开发依赖统一在根管理（turbo、ts、eslint、prettier） package.json:14-19
+- turbo.json
+  - pipeline.dev : 关闭缓存并保持进程常驻，适合本地开发 turbo.json:4-7
+  - pipeline.build : 声明构建产物目录用于缓存与变更追踪（ .next/** 、 dist/** ） turbo.json:8-10
+  - pipeline.lint : 关闭缓存以实时反馈代码质量 turbo.json:11-13
+- Next.js 应用 apps/web
+  - next.config.js.transpilePackages : 指定需跨包编译的工作区包（TS/源码消费） apps/web/next.config.js:1-3
+  - tsconfig.json.extends : 继承共享 TS 配置，保持一致编译选项 apps/web/tsconfig.json:2
+  - tsconfig.json.paths : 将 @aiagent/ui 定位到源码，避免必须先构建 apps/web/tsconfig.json:5-9
+  - .eslintrc.json.extends : 复用共享 ESLint 规则 apps/web/.eslintrc.json:2
+  - App Router 基本结构：根布局与示例页面 apps/web/app/layout.tsx:3-9 、 apps/web/app/page.tsx:5-28
+- 共享包 packages/ui
+  - peerDependencies : 约束宿主应用提供 React，避免重复打包 packages/ui/package.json:18-21
+  - scripts : dev 监听编译， build 生成类型与 JS packages/ui/package.json:7-10
+  - 导出入口：统一从 src/index.ts 暴露组件 packages/ui/src/index.ts:1
+- 共享配置包
+  - TS 基座：统一 target/lib/module/strict 等编译策略 packages/tsconfig/tsconfig.json:2-14
+  - ESLint 基座：通用环境与规则扩展点 packages/eslint-config/base.json:1-13
+开发与运行流
+
+- 启动开发：在根运行 npm run dev ，Turborepo并行启动各包的 dev （Next 开发服务器 + UI 包的 TS watch） package.json:9-11
+- 在应用中消费共享包：示例页面已直接使用 UI 的 Button 组件 apps/web/app/page.tsx:3,20
+- 构建与产物：统一在根运行 npm run build ，各包输出到声明目录以供缓存与部署 turbo.json:8-10
+工程习惯与好处
+
+- 单一依赖源与版本：在根管理通用开发依赖，避免各子包版本漂移 package.json:14-19
+- 共享配置与规则：通过 packages/tsconfig 、 packages/eslint-config 保持一致性 apps/web/tsconfig.json:2 、 apps/web/.eslintrc.json:2
+- 快速联调：Next 跨包编译 + TS 路径映射，前端直接引用源码而非构建产物 apps/web/next.config.js:1-3 、 apps/web/tsconfig.json:5-9
+- 高效编排：用 Turbo 的流水线统一执行、缓存与并行，加速本地与 CI turbo.json:3-14
+注意事项与建议
+
+- 锁文件一致性：仓库同时存在 yarn.lock 与 package-lock.json ，建议保留单一包管理器的锁文件以避免安装不一致（选择 npm 或 yarn 并删除另一份）
+- UI 包类型与入口：当前直接消费源码，已通过 transpilePackages 与 paths 保障开发体验；在生产构建/发布时可输出到 dist 并调整主入口以减少编译负担
+- 版本约束：UI 包的 peerDependencies 应与应用 React 版本保持一致，升级 React 时同时更新 peerDependencies packages/ui/package.json:18-21

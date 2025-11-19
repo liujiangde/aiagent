@@ -1,0 +1,39 @@
+node_modules
+.DS_Store
+dist
+apps/web/.next
+apps/web/out
+apps/web/node_modules
+packages/**/node_modules
+# Env files
+.env
+.env.*
+apps/*/.env
+apps/*/.env.*
+# # Secrets & keys
+# *.pem
+# *.key
+# *.crt
+# *.cer
+# *.p12
+# *.pfx
+# id_rsa
+# id_dsa
+# .npmrc
+
+# # Local databases
+# *.sqlite
+# *.db
+# *.db-journal
+
+# # Logs
+# *.log
+# npm-debug.log*
+# yarn-error.log*
+# pnpm-debug.log*
+
+# # Tool caches/build
+# .turbo
+# **/.next
+# coverage/
+# .vercel

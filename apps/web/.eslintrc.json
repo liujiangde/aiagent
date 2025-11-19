@@ -1,0 +1,4 @@
+{
+  "extends": ["@aiagent/eslint-config/base"],
+  "root": true
+}

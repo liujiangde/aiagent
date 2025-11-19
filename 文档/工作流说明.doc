@@ -1,0 +1,24 @@
+已添加
+
+- 新增 /.github/workflows/ci.yml:1 ，最小 CI 工作流示例已就绪
+工作流说明
+
+- 触发条件
+  - push 和 pull_request 到 main 、 develop 分支
+- 运行环境
+  - ubuntu-latest ，Node 20 ，启用 CI: true
+- 核心步骤
+  - actions/checkout@v4 拉取仓库
+  - actions/setup-node@v4 设置 Node 并开启 npm 依赖缓存
+  - npm ci 基于 package-lock.json 安装依赖
+  - npm run lint 统一执行工作区的代码检查
+  - npm run build 统一执行工作区构建，兼容 turbo.json 的产物与并行
+为什么这样设计
+- 使用 npm ci 保证依赖与锁文件一致，适合 CI 场景
+- cache: npm 结合锁文件自动缓存依赖，加速重复构建
+- 统一运行 turbo run lint/build ，可并行子包任务并利用 Turborepo 的管道与缓存声明
+可选扩展
+- 增加 matrix 以在多 Node 版本上验证
+- 拆分 lint 与 build 两个并行作业，提高失败定位效率
+- 如需远程缓存 Turborepo，后续可加入 TURBO_TOKEN 与 TURBO_TEAM 机密后启用
+如果你需要把测试或预览部署也纳入 CI（比如 Playwright/E2E 或 Vercel/GitHub Pages），我可以在此基础上继续补充对应作业。
