@@ -7,6 +7,9 @@ export default function Page() {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([])
   const [loading, setLoading] = useState(false)
   const [envStatus, setEnvStatus] = useState<string>("")
+  const [searchItems, setSearchItems] = useState<Array<{ title: string; url: string; snippet: string }>>([])
+  const [fetchResult, setFetchResult] = useState<{ status?: number; contentType?: string; text?: string } | null>(null)
+  const [ragLoading, setRagLoading] = useState(false)
 
   return (
     <main style={{ padding: 24, fontFamily: "system-ui" }}>
@@ -45,6 +48,41 @@ export default function Page() {
           }}
         >发送</AntButton>
         <AntButton onClick={async () => {
+          if (!text.trim()) return
+          try {
+            const res = await fetch("/api/tools/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: text, limit: 5 }) })
+            const data = await res.json()
+            setSearchItems(Array.isArray(data?.items) ? data.items : [])
+          } catch {
+            setSearchItems([])
+          }
+        }}>检索</AntButton>
+        <AntButton onClick={async () => {
+          if (!text.trim()) return
+          try {
+            const res = await fetch("/api/tools/web_fetch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: text }) })
+            const data = await res.json()
+            setFetchResult({ status: data?.status, contentType: data?.contentType, text: data?.text })
+          } catch {
+            setFetchResult({ text: "抓取失败" })
+          }
+        }}>抓取网页</AntButton>
+        <AntButton loading={ragLoading} onClick={async () => {
+          if (!text.trim()) return
+          setRagLoading(true)
+          try {
+            const res = await fetch("/api/rag/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
+            const data = await res.json()
+            setSearchItems(Array.isArray(data?.items) ? data.items : [])
+            const reply = String(data?.answer ?? "")
+            setMessages(m => [...m, { role: "assistant", content: reply }])
+          } catch {
+            setMessages(m => [...m, { role: "assistant", content: "检索回答失败" }])
+          } finally {
+            setRagLoading(false)
+          }
+        }}>检索回答</AntButton>
+        <AntButton onClick={async () => {
           try {
             // 向 /api/env-check 发送 GET 请求，检查服务器端是否已配置 API 密钥
             // 发起 GET 请求到 /api/env-check 接口，获取环境变量检查信息
@@ -71,6 +109,31 @@ export default function Page() {
             </List.Item>
           )}
         />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <div>检索结果：</div>
+        <List
+          size="small"
+          bordered
+          dataSource={searchItems}
+          renderItem={it => (
+            <List.Item>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <a href={it.url} target="_blank" rel="noreferrer">{it.title}</a>
+                <span style={{ color: "#666" }}>{it.snippet}</span>
+              </div>
+            </List.Item>
+          )}
+        />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <div>抓取网页：</div>
+        {fetchResult && (
+          <div>
+            <div>状态：{String(fetchResult.status ?? "")} 类型：{String(fetchResult.contentType ?? "")}</div>
+            <pre style={{ whiteSpace: "pre-wrap" }}>{fetchResult.text}</pre>
+          </div>
+        )}
       </div>
       <div style={{ marginTop: 16 }}>
         <div>密钥状态：</div>

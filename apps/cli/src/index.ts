@@ -43,7 +43,9 @@ async function main() {
   const tools = builtinTools()
   console.log("AI Agent CLI. 输入内容后回车，输入 /exit 退出。")
   // 定义递归函数，持续询问用户输入
-  const ask = () => rl.question("> ", async (line: string) => {
+  const ask = () => {
+    if ((rl as any).closed) return
+    rl.question("> ", async (line: string) => {
     // 如果用户输入 /exit，关闭接口并退出
     if (line.trim() === "/exit") { rl.close(); return }
     if (line.startsWith("/tool ")) {
@@ -56,7 +58,7 @@ async function main() {
       } catch (e: any) {
         console.error(e?.message ?? String(e))
       }
-      ask()
+      if (!(rl as any).closed) ask()
       return
     }
     // 将用户消息加入历史
@@ -79,8 +81,9 @@ async function main() {
       console.error(e?.message ?? String(e))
     }
     // 递归调用，继续等待用户输入
-    ask()
+    if (!(rl as any).closed) ask()
   })
+  }
   ask()
 }
 

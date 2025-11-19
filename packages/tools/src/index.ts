@@ -77,6 +77,81 @@ export function builtinTools(): ToolRegistry {
         const txt = fs.readFileSync(full, "utf8")
         return { content: txt }
       }
+    },
+    // 抓取网页内容：验证 URL、屏蔽本地地址、支持超时与长度限制，HTML 则去标签
+    web_fetch: {
+      name: "web_fetch",
+      run: async (args) => {
+        const url = String(args?.url ?? "")
+        if (!url) throw new Error("missing_url")
+        let u: URL
+        try { u = new URL(url) } catch { throw new Error("invalid_url") }
+        if (!(u.protocol === "http:" || u.protocol === "https:")) throw new Error("unsupported_protocol")
+        const host = u.hostname.toLowerCase()
+        if (host === "localhost" || host.startsWith("127.") || host === "::1") throw new Error("forbidden_host")
+        const timeout = Number.isFinite(Number(args?.timeout_ms)) ? Number(args?.timeout_ms) : 10000
+        const maxBytes = Number.isFinite(Number(args?.max_bytes)) ? Number(args?.max_bytes) : 100000
+        const controller = new AbortController()
+        const t = setTimeout(() => controller.abort(), timeout)
+        try {
+          const resp = await fetch(url, { signal: controller.signal })
+          const status = resp.status
+          const contentType = resp.headers.get("content-type") || ""
+          const textRaw = await resp.text()
+          const text = contentType.includes("html")
+            ? textRaw.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")
+            : textRaw
+          const truncated = text.length > maxBytes ? text.slice(0, maxBytes) : text
+          return { url, status, contentType, text: truncated }
+        } finally {
+          clearTimeout(t)
+        }
+      }
+    },
+    // 维基百科搜索：调用开放 API，返回标题、链接和纯文本摘要
+    search: {
+      name: "search",
+      run: async (args) => {
+        const query = String(args?.query ?? "").trim()
+        if (!query) throw new Error("missing_query")
+        const limit = Math.max(1, Math.min(10, Number(args?.limit ?? 5)))
+
+        async function tryHtml(source: "bing" | "so" | "baidu"): Promise<Array<{ title: string; url: string; snippet: string }>> {
+          let url = ""
+          let pattern: RegExp
+          const UA = { headers: { "User-Agent": "aiagent/0.1", "Accept": "text/html" } }
+          if (source === "bing") {
+            url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${limit}`
+            // <li class="b_algo"> ... <h2><a href="URL">TITLE</a></h2> ... <p>SNIPPET</p>
+            pattern = /<li class=\"b_algo\">[\s\S]*?<h2>\s*<a[^>]*href=\"([^\"]+)\"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/gi
+          } else if (source === "so") {
+            url = `https://www.so.com/s?q=${encodeURIComponent(query)}&num=${limit}`
+            // <h3 class="res-title"> <a href="URL">TITLE</a> ... <p class="res-desc">SNIPPET</p>
+            pattern = /<h3[^>]*res-title[^>]*>[\s\S]*?<a[^>]*href=\"([^\"]+)\"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<p[^>]*res-desc[^>]*>([\s\S]*?)<\/p>/gi
+          } else {
+            url = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}&rn=${limit}`
+            // <h3 class="c-title"> <a href="URL">TITLE</a> ... <div class="c-abstract">SNIPPET</div>
+            pattern = /<h3[^>]*c-title[^>]*>[\s\S]*?<a[^>]*href=\"([^\"]+)\"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<div[^>]*c-abstract[^>]*>([\s\S]*?)<\/div>/gi
+          }
+          const resp = await fetch(url, UA)
+          if (!resp.ok) return []
+          const html = await resp.text()
+          const items: Array<{ title: string; url: string; snippet: string }> = []
+          let m: RegExpExecArray | null
+          while ((m = pattern.exec(html)) && items.length < limit) {
+            const href = m[1]
+            const title = String(m[2]).replace(/<[^>]+>/g, " ").trim()
+            const snippet = String(m[3]).replace(/<[^>]+>/g, " ").trim()
+            items.push({ title, url: href, snippet })
+          }
+          return items
+        }
+
+        let items = await tryHtml("bing")
+        if (items.length === 0) items = await tryHtml("so")
+        if (items.length === 0) items = await tryHtml("baidu")
+        return { query, items }
+      }
     }
   }
 }
