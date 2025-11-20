@@ -81,7 +81,7 @@ export default function Page() {
             if (!text.trim()) return
             autoSearchAndFetch(text).catch(() => {})
             const next = [...messages, { role: "user", content: text }]
-            setMessages(next)
+            setMessages(next as { role: "user" | "assistant"; content: string }[])
             setText("")
             setLoading(true)
             try {
