@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
+import crypto from "node:crypto"
+import { appendLog, getSessionIdFromHeaders } from "../../lib/logger"
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as any
   const query = String(body?.query ?? "").trim()
   const limit = Math.max(1, Math.min(10, Number(body?.limit ?? 5)))
   if (!query) return NextResponse.json({ error: "missing_query" }, { status: 400 })
+  const sessionId = getSessionIdFromHeaders(req.headers) || crypto.randomUUID()
+  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, type: "tool_run", route: "/api/tools/search", status: "started", meta: { query_len: query.length, limit } })
 
   async function tryHtml(source: "bing" | "so" | "baidu") {
     let url = ""
@@ -37,5 +41,6 @@ export async function POST(req: NextRequest) {
   let items = await tryHtml("bing")
   if (items.length === 0) items = await tryHtml("so")
   if (items.length === 0) items = await tryHtml("baidu")
+  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, type: "tool_run", route: "/api/tools/search", status: "ok", meta: { items_count: items.length } })
   return NextResponse.json({ query, items })
 }

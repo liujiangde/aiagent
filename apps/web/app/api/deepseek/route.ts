@@ -25,6 +25,8 @@
  * - 切勿在客户端代码中读取或下发 `DEEPSEEK_API_KEY`；该路由仅在服务器端访问环境变量。
  */
 import { NextRequest, NextResponse } from "next/server"
+import crypto from "node:crypto"
+import { appendLog, writeSessionSnapshot, getSessionIdFromHeaders } from "../../lib/logger"
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
@@ -34,6 +36,7 @@ const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 export async function GET() {
   const key = process.env.DEEPSEEK_API_KEY
   const hasKey = !!key && key.trim().length > 0
+  appendLog({ ts: new Date().toISOString(), app: "web", type: "api_call", route: "/api/deepseek", method: "GET", status: "ok" })
   return NextResponse.json({ hasKey })
 }
 
@@ -47,6 +50,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as any
   const messages = body?.messages ?? [{ role: "user", content: "Hello" }]
   const model = body?.model ?? "deepseek-chat"
+  const sessionId = getSessionIdFromHeaders(req.headers) || crypto.randomUUID()
+  const reqId = crypto.randomUUID()
+  const t0 = Date.now()
+  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "started" })
 
   const resp = await fetch(DEEPSEEK_API_URL, {
     method: "POST",
@@ -64,10 +71,13 @@ export async function POST(req: NextRequest) {
 
   if (!resp.ok) {
     const err = await resp.text().catch(() => "")
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: err, duration_ms: Date.now() - t0 })
     return NextResponse.json({ error: "upstream_error", detail: err }, { status: 502 })
   }
 
   const data = await resp.json()
   const content = data?.choices?.[0]?.message?.content ?? ""
+  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "assistant_reply", route: "/api/deepseek", model, status: "ok", duration_ms: Date.now() - t0 })
+  writeSessionSnapshot(sessionId, { last_updated_at: new Date().toISOString(), messages, last_reply: content })
   return NextResponse.json({ model, content })
 }

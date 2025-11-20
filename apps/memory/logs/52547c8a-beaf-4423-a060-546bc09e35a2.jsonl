@@ -1,0 +1,2 @@
+{"ts":"2025-11-20T03:15:28.979Z","app":"cli","session_id":"52547c8a-beaf-4423-a060-546bc09e35a2","type":"user_input","content_excerpt":"你好"}
+{"ts":"2025-11-20T03:15:28.981Z","app":"cli","session_id":"52547c8a-beaf-4423-a060-546bc09e35a2","type":"api_call","route":"deepseek","status":"error","error":"DEEPSEEK_API_KEY missing"}

@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server"
+import crypto from "node:crypto"
+import { appendLog, getSessionIdFromHeaders } from "../../../lib/logger"
 
 /**
  * 根据关键词从搜索引擎抓取 HTML 结果
@@ -81,6 +83,9 @@ export async function POST(req: NextRequest) {
     })
 
   // 抓取搜索结果
+  const sessionId = getSessionIdFromHeaders(req.headers) || crypto.randomUUID()
+  const reqId = crypto.randomUUID()
+  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/rag/stream", status: "started", meta: { query_len: query.length, limit } })
   const items = await searchHtml(query, limit)
   // 拼接成“证据”文本
   const evidence = items.map((it, i) => `[${i + 1}] ${it.title}\n${it.snippet}\n${it.url}`).join("\n\n")
@@ -110,6 +115,7 @@ export async function POST(req: NextRequest) {
       send("citations", { items })
 
       // 请求 DeepSeek 流式接口
+      const t0 = Date.now()
       const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -127,6 +133,7 @@ export async function POST(req: NextRequest) {
       if (!resp.body) {
         send("error", "no_stream")
         send("done", "ok")
+        appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/rag/stream", status: "error", error: "no_stream" })
         controller.close()
         return
       }
@@ -171,6 +178,7 @@ export async function POST(req: NextRequest) {
 
       // 正常结束
       send("done", "ok")
+      appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "assistant_reply", route: "/api/rag/stream", status: "ok", duration_ms: Date.now() - t0, meta: { items_count: items.length } })
       controller.close()
     }
   })

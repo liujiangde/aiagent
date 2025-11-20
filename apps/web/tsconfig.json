@@ -5,6 +5,9 @@
     "paths": {
       "@aiagent/ui": [
         "../../packages/ui/src/index.ts"
+      ],
+      "@aiagent/retrieval": [
+        "../../packages/retrieval/src/index.ts"
       ]
     },
     "allowJs": true,

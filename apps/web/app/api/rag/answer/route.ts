@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import crypto from "node:crypto"
+import { appendLog, getSessionIdFromHeaders } from "../../../lib/logger"
 
 async function searchHtml(query: string, limit: number) {
   async function tryHtml(source: "bing" | "so" | "baidu") {
@@ -42,6 +44,10 @@ export async function POST(req: NextRequest) {
   const limit = Math.max(1, Math.min(10, Number(body?.limit ?? 5)))
   const temperature = Number(body?.temperature ?? 0)
   if (!query) return NextResponse.json({ error: "missing_query" }, { status: 400 })
+  const sessionId = getSessionIdFromHeaders(req.headers) || crypto.randomUUID()
+  const reqId = crypto.randomUUID()
+  const t0 = Date.now()
+  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/rag/answer", status: "started", meta: { query_len: query.length, limit } })
 
   const items = await searchHtml(query, limit)
   const evidence = items.map((it, i) => `[${i + 1}] ${it.title}\n${it.snippet}\n${it.url}`).join("\n\n")
@@ -64,9 +70,11 @@ export async function POST(req: NextRequest) {
   })
   if (!resp.ok) {
     const err = await resp.text().catch(() => "")
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/rag/answer", status: "error", error: err, duration_ms: Date.now() - t0 })
     return NextResponse.json({ error: "upstream_error", detail: err }, { status: 502 })
   }
   const data = await resp.json()
   const answer = data?.choices?.[0]?.message?.content ?? ""
+  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "assistant_reply", route: "/api/rag/answer", status: "ok", duration_ms: Date.now() - t0, meta: { items_count: items.length } })
   return NextResponse.json({ query, items, answer })
 }

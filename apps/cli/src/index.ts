@@ -1,4 +1,6 @@
 import readline from "node:readline"
+import crypto from "node:crypto"
+import { append as logAppend, ensureSessionLog } from "./logger"
 const toolsMod = require("../../../packages/tools/dist/index.js")
 const { builtinTools, executeTool, parseToolCall, toolSystemPrompt } = toolsMod
 
@@ -41,6 +43,8 @@ async function main() {
   // 存储聊天历史
   const messages: ChatMessage[] = []
   const tools = builtinTools()
+  const sessionId = crypto.randomUUID()
+  ensureSessionLog(sessionId)
   console.log("AI Agent CLI. 输入内容后回车，输入 /exit 退出。")
   // 定义递归函数，持续询问用户输入
   const ask = () => {
@@ -53,32 +57,45 @@ async function main() {
         const json = line.slice(6)
         const call = parseToolCall(json)
         if (!call) throw new Error("invalid_tool_call")
+        const t0 = Date.now()
+        logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "tool_run", tool: call.tool, status: "started" })
         const out = await executeTool(tools, call)
         console.log(JSON.stringify(out, null, 2))
+        logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "tool_run", tool: call.tool, status: "ok", duration_ms: Date.now() - t0 })
       } catch (e: any) {
         console.error(e?.message ?? String(e))
+        logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "tool_run", status: "error", error: e?.message ?? String(e) })
       }
       if (!(rl as any).closed) ask()
       return
     }
     // 将用户消息加入历史
     messages.push({ role: "user", content: line })
+    logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "user_input", content_excerpt: line.slice(0, 200) })
     try {
       const sys = toolSystemPrompt(tools)
+      const t0 = Date.now()
       const answer1 = await callDeepseek([{ role: "system", content: sys }, ...messages])
+      logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "api_call", route: "deepseek", status: "ok", duration_ms: Date.now() - t0 })
       const call = parseToolCall(answer1)
       if (call) {
+        const t1 = Date.now()
         const obs = await executeTool(tools, call)
+        logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "tool_run", tool: call.tool, status: "ok", duration_ms: Date.now() - t1 })
         messages.push({ role: "assistant", content: JSON.stringify({ observation: obs }) })
+        const t2 = Date.now()
         const answer2 = await callDeepseek(messages)
+        logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "assistant_reply", status: "ok", duration_ms: Date.now() - t2 })
         console.log(answer2)
         messages.push({ role: "assistant", content: answer2 })
       } else {
         console.log(answer1)
+        logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "assistant_reply", status: "ok" })
         messages.push({ role: "assistant", content: answer1 })
       }
     } catch (e: any) {
       console.error(e?.message ?? String(e))
+      logAppend(sessionId, { ts: new Date().toISOString(), app: "cli", session_id: sessionId, type: "api_call", route: "deepseek", status: "error", error: e?.message ?? String(e) })
     }
     // 递归调用，继续等待用户输入
     if (!(rl as any).closed) ask()

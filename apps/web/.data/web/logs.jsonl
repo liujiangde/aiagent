@@ -1,0 +1,4 @@
+{"ts":"2025-11-20T03:13:46.910Z","app":"web","session_id":"test-session","type":"api_call","route":"/api/kb/search","status":"started","meta":{"query_len":10,"k":5}}
+{"ts":"2025-11-20T03:13:46.912Z","app":"web","session_id":"test-session","type":"assistant_reply","route":"/api/kb/search","status":"ok","meta":{"items_count":2}}
+{"ts":"2025-11-20T03:14:25.032Z","app":"web","session_id":"test-session","type":"api_call","route":"/api/kb/add_text","status":"started","meta":{"title_len":5,"text_len":12}}
+{"ts":"2025-11-20T03:14:25.033Z","app":"web","session_id":"test-session","type":"assistant_reply","route":"/api/kb/add_text","status":"ok","meta":{"added":1}}

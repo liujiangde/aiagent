@@ -1,5 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
+import * as kb from "@aiagent/retrieval"
 
 // 工具调用结构：包含工具名称和参数
 export type ToolCall = { tool: string; args: Record<string, any> }
@@ -54,6 +55,30 @@ export function builtinTools(): ToolRegistry {
     now: {
       name: "now",
       run: async () => ({ iso: new Date().toISOString() })
+    },
+    // 知识库：添加纯文本到索引并持久化
+    kb_add_text: {
+      name: "kb_add_text",
+      run: async (args) => {
+        const title = String(args?.title ?? "")
+        const text = String(args?.text ?? "")
+        if (!text || text.length < 10) throw new Error("text_too_short")
+        if (text.length > 200_000) throw new Error("text_too_long")
+        const out = kb.addDocument({ title, text })
+        const st = kb.stats()
+        return { added: out.added, docId: out.docId, stats: st }
+      }
+    },
+    // 知识库：语义检索，返回 Top-k 片段
+    kb_search: {
+      name: "kb_search",
+      run: async (args) => {
+        const query = String(args?.query ?? "").trim()
+        const k = Math.max(1, Math.min(10, Number(args?.k ?? 5)))
+        if (!query) throw new Error("missing_query")
+        const res = kb.search({ query, k })
+        return res
+      }
     },
     // 安全计算表达式，仅允许数字与运算符
     calc: {

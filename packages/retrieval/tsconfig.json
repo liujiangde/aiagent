@@ -1,9 +1,13 @@
 {
   "extends": "@aiagent/tsconfig/tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist",
     "module": "CommonJS",
-    "moduleResolution": "Node"
+    "outDir": "dist",
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "skipLibCheck": true,
+    "declaration": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"]

@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { Button as AntButton, Input, List, Spin } from "antd"
 
 export default function Page() {
@@ -12,6 +12,17 @@ export default function Page() {
   const [ragLoading, setRagLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState("")
+  const [sessionId, setSessionId] = useState<string>("")
+
+  useEffect(() => {
+    const k = "__session_id__"
+    let sid = localStorage.getItem(k) || ""
+    if (!sid) {
+      sid = (crypto as any)?.randomUUID ? (crypto as any).randomUUID() : Math.random().toString(36).slice(2)
+      localStorage.setItem(k, sid)
+    }
+    setSessionId(sid)
+  }, [])
 
   return (
     <main style={{ padding: 24, fontFamily: "system-ui" }}>
@@ -36,7 +47,7 @@ export default function Page() {
             try {
               const res = await fetch("/api/deepseek", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "x-session-id": sessionId },
                 body: JSON.stringify({ messages: next, temperature: 0 })
               })
               const data = await res.json()
@@ -52,7 +63,7 @@ export default function Page() {
         <AntButton onClick={async () => {
           if (!text.trim()) return
           try {
-            const res = await fetch("/api/tools/search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: text, limit: 5 }) })
+            const res = await fetch("/api/tools/search", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, limit: 5 }) })
             const data = await res.json()
             setSearchItems(Array.isArray(data?.items) ? data.items : [])
           } catch {
@@ -62,7 +73,7 @@ export default function Page() {
         <AntButton onClick={async () => {
           if (!text.trim()) return
           try {
-            const res = await fetch("/api/tools/web_fetch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: text }) })
+            const res = await fetch("/api/tools/web_fetch", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ url: text }) })
             const data = await res.json()
             setFetchResult({ status: data?.status, contentType: data?.contentType, text: data?.text })
           } catch {
@@ -73,7 +84,7 @@ export default function Page() {
           if (!text.trim()) return
           setRagLoading(true)
           try {
-            const res = await fetch("/api/rag/answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
+            const res = await fetch("/api/rag/answer", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
             const data = await res.json()
             setSearchItems(Array.isArray(data?.items) ? data.items : [])
             const reply = String(data?.answer ?? "")
@@ -84,12 +95,27 @@ export default function Page() {
             setRagLoading(false)
           }
         }}>检索回答</AntButton>
+        <AntButton loading={ragLoading} onClick={async () => {
+          if (!text.trim()) return
+          setRagLoading(true)
+          try {
+            const res = await fetch("/api/rag/kb_answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: text, k: 5, temperature: 0 }) })
+            const data = await res.json()
+            setSearchItems(Array.isArray(data?.items) ? data.items : [])
+            const reply = String(data?.answer ?? "")
+            setMessages(m => [...m, { role: "assistant", content: reply }])
+          } catch {
+            setMessages(m => [...m, { role: "assistant", content: "知识库回答失败" }])
+          } finally {
+            setRagLoading(false)
+          }
+        }}>知识库回答</AntButton>
         <AntButton loading={streaming} onClick={async () => {
           if (!text.trim()) return
           setStreaming(true)
           setStreamText("")
           try {
-            const res = await fetch("/api/rag/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
+            const res = await fetch("/api/rag/stream", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
             if (!res.body) throw new Error("no_stream")
             const reader = res.body.getReader()
             const decoder = new TextDecoder()
@@ -133,7 +159,7 @@ export default function Page() {
             // 向 /api/env-check 发送 GET 请求，检查服务器端是否已配置 API 密钥
             // 发起 GET 请求到 /api/env-check 接口，获取环境变量检查信息
             // 临时硬编码，后续需在 apps/web/app/api 下新增 env-check/route.ts 提供该接口
-            const res = await fetch("/api/env-check")
+            const res = await fetch("/api/env-check", { headers: { "x-session-id": sessionId } })
             const data = await res.json()
             setEnvStatus(`密钥存在: ${data.hasKey ? "是" : "否"}，长度: ${data.length}`)
           } catch {
