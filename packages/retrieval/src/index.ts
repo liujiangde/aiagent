@@ -5,7 +5,8 @@
  * 方法：
  * - 文本清洗 + 词切分（英文/数字/中文简体范围）
  * - 哈希词袋向量（固定维度 1024），L2 归一化
- * - 余弦相似度排序，返回 Top‑k 片段
+ * - 余弦相似度 + BM25 融合重排序
+ * - 按文档去重，并进行多片段拼接形成更完整的上下文
  * - 索引以 JSON 文件持久化，避免数据库依赖
  */
 import fs from "node:fs"
@@ -205,19 +206,44 @@ export function search(args: { query: string; k?: number }) {
     return { chunk: r.chunk, score }
   })
   mix.sort((a, b) => b.score - a.score)
-  const seenDoc = new Set<string>()
-  const out: { docId: string; title?: string; text: string; score: number }[] = []
+  // 基于融合分数对候选进行按文档分组，并做多片段拼接
+  const perDocMax = 3 // 每个文档最多取 3 个片段参与拼接
+  const maxDocLen = 2000 // 单个文档拼接后的最大字符数
+  const grouped = new Map<string, { title?: string; parts: Array<{ text: string; score: number }> }>()
   for (const m of mix) {
-    if (seenDoc.has(m.chunk.docId)) continue
-    seenDoc.add(m.chunk.docId)
-    out.push({
-      docId: m.chunk.docId,
-      title: m.chunk.title,
-      text: m.chunk.text.length > 1200 ? (m.chunk.text.slice(0, 1100) + "...") : m.chunk.text,
-      score: Number(m.score.toFixed(6))
-    })
-    if (out.length >= k) break
+    const did = m.chunk.docId
+    let g = grouped.get(did)
+    if (!g) { g = { title: m.chunk.title, parts: [] }; grouped.set(did, g) }
+    if (g.parts.length < perDocMax) {
+      g.parts.push({ text: m.chunk.text, score: m.score })
+    }
   }
+  // 计算文档层打分（取该文档内片段的最大融合分数），并生成拼接文本
+  const docsRank: Array<{ docId: string; title?: string; text: string; score: number }> = []
+  for (const [docId, g] of grouped.entries()) {
+    const sortedParts = g.parts.sort((a, b) => b.score - a.score)
+    const sentencesSeen = new Set<string>()
+    let buf = ""
+    for (const p of sortedParts) {
+      // 简单压缩：去多余空白与重复句子
+      const comp = String(p.text).replace(/\s+/g, " ").trim()
+      const segs = comp.split(/(?<=[。；;.!?\n])/)
+      for (const s of segs) {
+        const ss = s.trim()
+        if (!ss) continue
+        if (sentencesSeen.has(ss)) continue
+        if ((buf + ss).length > maxDocLen) { break }
+        sentencesSeen.add(ss)
+        buf += (buf ? "\n" : "") + ss
+      }
+      if (buf.length >= maxDocLen) break
+    }
+    const docScore = sortedParts.length > 0 ? sortedParts[0].score : 0
+    docsRank.push({ docId, title: g.title, text: buf, score: Number(docScore.toFixed(6)) })
+  }
+  // 选择 Top‑k 文档
+  docsRank.sort((a, b) => b.score - a.score)
+  const out = docsRank.slice(0, k)
   return { query: args.query, items: out }
 }
 

@@ -7,12 +7,15 @@ export default function Page() {
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([])
   const [loading, setLoading] = useState(false)
   const [envStatus, setEnvStatus] = useState<string>("")
+  const [metricsSummary, setMetricsSummary] = useState<any | null>(null)
   const [searchItems, setSearchItems] = useState<Array<{ title: string; url: string; snippet: string }>>([])
   const [fetchResult, setFetchResult] = useState<{ status?: number; contentType?: string; text?: string } | null>(null)
   const [ragLoading, setRagLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState("")
   const [sessionId, setSessionId] = useState<string>("")
+  const [plannerTrace, setPlannerTrace] = useState<Array<{ step: string; detail?: any; duration_ms?: number }>>([])
+  const [plannerMetrics, setPlannerMetrics] = useState<Record<string, any> | null>(null)
 
   useEffect(() => {
     const k = "__session_id__"
@@ -101,6 +104,27 @@ export default function Page() {
           }}
         >发送</AntButton>
 
+        {/* 规划执行：调用 /api/agent/plan_execute，返回最终回答与轨迹/指标 */}
+        <AntButton onClick={async () => {
+          const q = text.trim()
+          if (!q) return
+          setLoading(true)
+          setPlannerTrace([])
+          setPlannerMetrics(null)
+          try {
+            const res = await fetch("/api/agent/plan_execute", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ prompt: q }) })
+            const dj = await res.json()
+            const reply = String(dj?.final_answer ?? "")
+            setMessages(m => [...m, { role: "assistant", content: reply }])
+            setPlannerTrace(Array.isArray(dj?.trace) ? dj.trace : [])
+            setPlannerMetrics(dj?.metrics ?? null)
+          } catch {
+            setMessages(m => [...m, { role: "assistant", content: "规划执行失败" }])
+          } finally {
+            setLoading(false)
+          }
+        }}>规划执行</AntButton>
+
         <AntButton loading={ragLoading} onClick={async () => {
           if (!text.trim()) return
           setRagLoading(true)
@@ -174,6 +198,16 @@ export default function Page() {
             setEnvStatus("检查失败")
           }
         }}>检查API密钥</AntButton>
+        {/* 指标汇总：调用 /api/metrics/summary 展示统计 */}
+        <AntButton onClick={async () => {
+          try {
+            const res = await fetch("/api/metrics/summary", { headers: { "x-session-id": sessionId } })
+            const dj = await res.json()
+            setMetricsSummary(dj)
+          } catch {
+            setMetricsSummary({ error: "metrics_fetch_failed" })
+          }
+        }}>指标汇总</AntButton>
       </div>
       <div style={{ marginTop: 16 }}>
         <div>会话：</div>
@@ -189,6 +223,26 @@ export default function Page() {
             </List.Item>
           )}
         />
+      </div>
+      {/* 规划执行轨迹与指标展示 */}
+      <div style={{ marginTop: 16 }}>
+        <div>规划执行轨迹：</div>
+        <List
+          size="small"
+          bordered
+          dataSource={plannerTrace}
+          renderItem={st => (
+            <List.Item>
+              <strong>{st.step}</strong>
+              <span style={{ marginLeft: 8, color: "#666" }}>耗时：{String(st.duration_ms ?? 0)}ms</span>
+              <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{JSON.stringify(st.detail ?? {}, null, 2)}</pre>
+            </List.Item>
+          )}
+        />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <div>规划执行指标：</div>
+        <pre style={{ whiteSpace: "pre-wrap" }}>{plannerMetrics ? JSON.stringify(plannerMetrics, null, 2) : "无"}</pre>
       </div>
       <div style={{ marginTop: 16 }}>
         <div>引用列表：</div>
@@ -222,6 +276,10 @@ export default function Page() {
       <div style={{ marginTop: 16 }}>
         <div>密钥状态：</div>
         <pre>{envStatus}</pre>
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <div>指标汇总：</div>
+        <pre style={{ whiteSpace: "pre-wrap" }}>{metricsSummary ? JSON.stringify(metricsSummary, null, 2) : "无"}</pre>
       </div>
     </main>
   )

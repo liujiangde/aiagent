@@ -1,0 +1,38 @@
+{
+  "session_id": "ab054ac8-7248-415b-ac6a-7d99f25e4310",
+  "last_updated_at": "2025-11-20T14:04:05.857Z",
+  "last_prompt": "kb_add_text 和 kb_search 怎么用？",
+  "last_reply": "根据提供的上下文，我未找到关于 `kb_add_text` 和 `kb_search` 函数的使用说明。上下文内容主要涉及Python基础知识，如reshape函数、字典操作、JSON转换、列表函数等，但没有提及这两个特定函数。\n\n如果您需要了解这些函数的用法，建议查阅相关库的官方文档或提供更具体的上下文信息。",
+  "last_trace": [
+    {
+      "step": "kb_search",
+      "detail": {
+        "items": 0
+      },
+      "duration_ms": 1
+    },
+    {
+      "step": "search",
+      "detail": {
+        "items": 4
+      },
+      "duration_ms": 1602
+    },
+    {
+      "step": "web_fetch",
+      "detail": {
+        "status": 200,
+        "contentType": "text/html;charset=utf-8"
+      },
+      "duration_ms": 855
+    },
+    {
+      "step": "answer",
+      "detail": {
+        "model": "deepseek-chat",
+        "used_llm": true
+      },
+      "duration_ms": 4604
+    }
+  ]
+}

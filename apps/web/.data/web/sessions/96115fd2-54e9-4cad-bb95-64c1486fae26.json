@@ -1,11 +1,38 @@
 {
   "session_id": "96115fd2-54e9-4cad-bb95-64c1486fae26",
-  "last_updated_at": "2025-11-20T12:59:28.859Z",
-  "messages": [
+  "last_updated_at": "2025-11-20T14:35:37.058Z",
+  "last_prompt": "自动联网搜索今天是几月几号",
+  "last_reply": "根据提供的上下文，我无法获取今天的日期信息。如果您需要知道当前日期，请手动查看您的设备日历或启用我的联网搜索功能（若支持）。",
+  "last_trace": [
     {
-      "role": "user",
-      "content": "今天是几月几号"
+      "step": "kb_search",
+      "detail": {
+        "items": 0
+      },
+      "duration_ms": 0
+    },
+    {
+      "step": "search",
+      "detail": {
+        "items": 5
+      },
+      "duration_ms": 1435
+    },
+    {
+      "step": "web_fetch",
+      "detail": {
+        "status": 200,
+        "contentType": "text/html;charset=UTF-8"
+      },
+      "duration_ms": 36
+    },
+    {
+      "step": "answer",
+      "detail": {
+        "model": "deepseek-chat",
+        "used_llm": true
+      },
+      "duration_ms": 2472
     }
-  ],
-  "last_reply": "今天是 **2024 年 5 月 24 日**，星期五。"
+  ]
 }
