@@ -24,6 +24,45 @@ export default function Page() {
     setSessionId(sid)
   }, [])
 
+  async function autoSearchAndFetch(input: string) {
+    const q = input.trim()
+    if (!q) return
+    let asUrl: string | null = null
+    try {
+      const u = new URL(q)
+      if (u.protocol === "http:" || u.protocol === "https:") asUrl = q
+    } catch {}
+    if (asUrl) {
+      try {
+        const rf = await fetch("/api/tools/web_fetch", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ url: asUrl }) })
+        const dj = await rf.json()
+        setFetchResult({ status: dj?.status, contentType: dj?.contentType, text: dj?.text })
+        setSearchItems([])
+      } catch {
+        setFetchResult({ text: "抓取失败" })
+      }
+      return
+    }
+    try {
+      const rs = await fetch("/api/tools/search", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: q, limit: 5 }) })
+      const dj = await rs.json()
+      const items = Array.isArray(dj?.items) ? dj.items : []
+      setSearchItems(items)
+      const first = items[0]
+      if (first?.url) {
+        try {
+          const rf = await fetch("/api/tools/web_fetch", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ url: first.url }) })
+          const fj = await rf.json()
+          setFetchResult({ status: fj?.status, contentType: fj?.contentType, text: fj?.text })
+        } catch {
+          setFetchResult({ text: "抓取失败" })
+        }
+      }
+    } catch {
+      setSearchItems([])
+    }
+  }
+
   return (
     <main style={{ padding: 24, fontFamily: "system-ui" }}>
       <h1>AI Agent Web</h1>
@@ -40,6 +79,7 @@ export default function Page() {
           loading={loading}
           onClick={async () => {
             if (!text.trim()) return
+            autoSearchAndFetch(text).catch(() => {})
             const next = [...messages, { role: "user", content: text }]
             setMessages(next)
             setText("")
@@ -60,46 +100,13 @@ export default function Page() {
             }
           }}
         >发送</AntButton>
-        <AntButton onClick={async () => {
-          if (!text.trim()) return
-          try {
-            const res = await fetch("/api/tools/search", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, limit: 5 }) })
-            const data = await res.json()
-            setSearchItems(Array.isArray(data?.items) ? data.items : [])
-          } catch {
-            setSearchItems([])
-          }
-        }}>检索</AntButton>
-        <AntButton onClick={async () => {
-          if (!text.trim()) return
-          try {
-            const res = await fetch("/api/tools/web_fetch", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ url: text }) })
-            const data = await res.json()
-            setFetchResult({ status: data?.status, contentType: data?.contentType, text: data?.text })
-          } catch {
-            setFetchResult({ text: "抓取失败" })
-          }
-        }}>抓取网页</AntButton>
+
         <AntButton loading={ragLoading} onClick={async () => {
           if (!text.trim()) return
           setRagLoading(true)
+          autoSearchAndFetch(text).catch(() => {})
           try {
-            const res = await fetch("/api/rag/answer", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
-            const data = await res.json()
-            setSearchItems(Array.isArray(data?.items) ? data.items : [])
-            const reply = String(data?.answer ?? "")
-            setMessages(m => [...m, { role: "assistant", content: reply }])
-          } catch {
-            setMessages(m => [...m, { role: "assistant", content: "检索回答失败" }])
-          } finally {
-            setRagLoading(false)
-          }
-        }}>检索回答</AntButton>
-        <AntButton loading={ragLoading} onClick={async () => {
-          if (!text.trim()) return
-          setRagLoading(true)
-          try {
-            const res = await fetch("/api/rag/kb_answer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: text, k: 5, temperature: 0 }) })
+            const res = await fetch("/api/rag/kb_answer", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, k: 5, temperature: 0 }) })
             const data = await res.json()
             setSearchItems(Array.isArray(data?.items) ? data.items : [])
             const reply = String(data?.answer ?? "")
@@ -114,6 +121,7 @@ export default function Page() {
           if (!text.trim()) return
           setStreaming(true)
           setStreamText("")
+          autoSearchAndFetch(text).catch(() => {})
           try {
             const res = await fetch("/api/rag/stream", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
             if (!res.body) throw new Error("no_stream")

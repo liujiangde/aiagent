@@ -154,17 +154,71 @@ export function addDocument(doc: { id?: string; title?: string; text: string; ch
  */
 export function search(args: { query: string; k?: number }) {
   const idx = loadIndex()
-  const qv = embed(args.query)
   const k = Math.max(1, Math.min(20, Number(args.k ?? 5)))
-  const scored = idx.chunks.map(ch => ({ chunk: ch, score: cosine(qv, ch.vec) }))
-  scored.sort((a, b) => b.score - a.score)
-  const top = scored.slice(0, k).map(s => ({
-    docId: s.chunk.docId,
-    title: s.chunk.title,
-    text: s.chunk.text,
-    score: Number(s.score.toFixed(6))
-  }))
-  return { query: args.query, items: top }
+  const qv = embed(args.query)
+  const base = idx.chunks.map(ch => ({ chunk: ch, cos: cosine(qv, ch.vec) }))
+  base.sort((a, b) => b.cos - a.cos)
+  const poolSize = Math.min(base.length, Math.max(10, k * 5))
+  const pool = base.slice(0, poolSize)
+
+  const qTokens = tokenize(args.query)
+  const allChunks = idx.chunks
+  const avgdl = (() => {
+    if (allChunks.length === 0) return 1
+    let sum = 0
+    for (const c of allChunks) sum += tokenize(c.text).length
+    return sum / allChunks.length
+  })()
+  const df = new Map<string, number>()
+  for (const c of allChunks) {
+    const set = new Set(tokenize(c.text))
+    for (const t of set) df.set(t, (df.get(t) || 0) + 1)
+  }
+  const N = allChunks.length || 1
+  const k1 = 1.2
+  const b = 0.75
+  function bm25(chunkText: string): number {
+    const toks = tokenize(chunkText)
+    const dl = toks.length || 1
+    let s = 0
+    const tf = new Map<string, number>()
+    for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1)
+    for (const qt of qTokens) {
+      const dfv = df.get(qt) || 0.5
+      const idf = Math.log((N - dfv + 0.5) / (dfv + 0.5) + 1)
+      const tfv = tf.get(qt) || 0
+      const num = tfv * (k1 + 1)
+      const den = tfv + k1 * (1 - b + b * (dl / avgdl))
+      s += idf * (den === 0 ? 0 : num / den)
+    }
+    return s
+  }
+  let bmMax = 0
+  const rescored = pool.map(p => {
+    const bm = bm25(p.chunk.text)
+    if (bm > bmMax) bmMax = bm
+    return { chunk: p.chunk, cos: p.cos, bm }
+  })
+  const mix = rescored.map(r => {
+    const bmNorm = bmMax > 0 ? r.bm / bmMax : 0
+    const score = 0.5 * r.cos + 0.5 * bmNorm
+    return { chunk: r.chunk, score }
+  })
+  mix.sort((a, b) => b.score - a.score)
+  const seenDoc = new Set<string>()
+  const out: { docId: string; title?: string; text: string; score: number }[] = []
+  for (const m of mix) {
+    if (seenDoc.has(m.chunk.docId)) continue
+    seenDoc.add(m.chunk.docId)
+    out.push({
+      docId: m.chunk.docId,
+      title: m.chunk.title,
+      text: m.chunk.text.length > 1200 ? (m.chunk.text.slice(0, 1100) + "...") : m.chunk.text,
+      score: Number(m.score.toFixed(6))
+    })
+    if (out.length >= k) break
+  }
+  return { query: args.query, items: out }
 }
 
 /**

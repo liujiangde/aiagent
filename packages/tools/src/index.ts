@@ -14,6 +14,35 @@ export type Tool = {
 // 工具注册表：键为工具名，值为工具对象
 export type ToolRegistry = Record<string, Tool>
 
+type GuardOptions = { timeoutMs?: number; retries?: number; memoKey?: (args: Record<string, any>) => string | null }
+const __memo = new Map<string, any>()
+function withGuard(run: (args: Record<string, any>) => Promise<any>, opts: GuardOptions): (args: Record<string, any>) => Promise<any> {
+  const timeoutMs = Number.isFinite(Number(opts.timeoutMs)) ? Number(opts.timeoutMs) : 15000
+  const retries = Math.max(0, Number(opts.retries ?? 1))
+  const memoKeyFn = opts.memoKey
+  return async (args: Record<string, any>) => {
+    const key = memoKeyFn ? memoKeyFn(args) : null
+    if (key && __memo.has(key)) return __memo.get(key)
+    let lastErr: any
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const p = run(args)
+      const race = Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), timeoutMs))
+      ])
+      try {
+        const out = await race
+        if (key) __memo.set(key, out)
+        return out
+      } catch (e) {
+        lastErr = e
+        if (attempt === retries) throw e
+      }
+    }
+    throw lastErr
+  }
+}
+
 /**
  * 从文本中解析工具调用
  * 优先匹配 >>>TOOL: 开头的 JSON，其次尝试直接解析整段文本
@@ -52,14 +81,11 @@ export function builtinTools(): ToolRegistry {
   const baseDocs = path.resolve(__dirname, "../../../文档")
   return {
     // 获取当前 ISO 时间
-    now: {
-      name: "now",
-      run: async () => ({ iso: new Date().toISOString() })
-    },
+    now: { name: "now", run: withGuard(async () => ({ iso: new Date().toISOString() }), { memoKey: () => "now" }) },
     // 知识库：添加纯文本到索引并持久化
     kb_add_text: {
       name: "kb_add_text",
-      run: async (args) => {
+      run: withGuard(async (args) => {
         const title = String(args?.title ?? "")
         const text = String(args?.text ?? "")
         if (!text || text.length < 10) throw new Error("text_too_short")
@@ -67,46 +93,56 @@ export function builtinTools(): ToolRegistry {
         const out = kb.addDocument({ title, text })
         const st = kb.stats()
         return { added: out.added, docId: out.docId, stats: st }
-      }
+      }, { retries: 0 })
     },
     // 知识库：语义检索，返回 Top-k 片段
     kb_search: {
       name: "kb_search",
-      run: async (args) => {
+      run: withGuard(async (args) => {
         const query = String(args?.query ?? "").trim()
         const k = Math.max(1, Math.min(10, Number(args?.k ?? 5)))
         if (!query) throw new Error("missing_query")
         const res = kb.search({ query, k })
         return res
-      }
+      }, { memoKey: (a) => {
+        const q = String(a?.query ?? "").trim()
+        const k = Math.max(1, Math.min(10, Number(a?.k ?? 5)))
+        return q ? `kb_search:${q}:${k}` : null
+      } })
     },
     // 安全计算表达式，仅允许数字与运算符
     calc: {
       name: "calc",
-      run: async (args) => {
+      run: withGuard(async (args) => {
         const expr = String(args?.expr ?? "")
         if (!/^[0-9+\-*/().\s]+$/.test(expr)) throw new Error("invalid_expr")
         // eslint-disable-next-line no-new-func
         const val = Function(`return (${expr})`)()
         return { result: val }
-      }
+      }, { memoKey: (a) => {
+        const expr = String(a?.expr ?? "")
+        return expr ? `calc:${expr}` : null
+      } })
     },
     // 读取指定路径的文本文件，禁止越界访问
     read_file: {
       name: "read_file",
-      run: async (args) => {
+      run: withGuard(async (args) => {
         const rel = String(args?.path ?? "")
         if (!rel || rel.includes("..")) throw new Error("invalid_path")
         const full = path.resolve(baseDocs, rel)
         if (!full.startsWith(baseDocs)) throw new Error("forbidden")
         const txt = fs.readFileSync(full, "utf8")
         return { content: txt }
-      }
+      }, { memoKey: (a) => {
+        const rel = String(a?.path ?? "")
+        return rel ? `read_file:${rel}` : null
+      } })
     },
     // 抓取网页内容：验证 URL、屏蔽本地地址、支持超时与长度限制，HTML 则去标签
     web_fetch: {
       name: "web_fetch",
-      run: async (args) => {
+      run: withGuard(async (args) => {
         const url = String(args?.url ?? "")
         if (!url) throw new Error("missing_url")
         let u: URL
@@ -131,12 +167,17 @@ export function builtinTools(): ToolRegistry {
         } finally {
           clearTimeout(t)
         }
-      }
+      }, { memoKey: (a) => {
+        const url = String(a?.url ?? "")
+        const timeout = Number.isFinite(Number(a?.timeout_ms)) ? Number(a?.timeout_ms) : 10000
+        const maxBytes = Number.isFinite(Number(a?.max_bytes)) ? Number(a?.max_bytes) : 100000
+        return url ? `web_fetch:${url}:${timeout}:${maxBytes}` : null
+      } })
     },
     // 维基百科搜索：调用开放 API，返回标题、链接和纯文本摘要
     search: {
       name: "search",
-      run: async (args) => {
+      run: withGuard(async (args) => {
         const query = String(args?.query ?? "").trim()
         if (!query) throw new Error("missing_query")
         const limit = Math.max(1, Math.min(10, Number(args?.limit ?? 5)))
@@ -176,7 +217,11 @@ export function builtinTools(): ToolRegistry {
         if (items.length === 0) items = await tryHtml("so")
         if (items.length === 0) items = await tryHtml("baidu")
         return { query, items }
-      }
+      }, { memoKey: (a) => {
+        const q = String(a?.query ?? "").trim()
+        const limit = Math.max(1, Math.min(10, Number(a?.limit ?? 5)))
+        return q ? `search:${q}:${limit}` : null
+      } })
     }
   }
 }
