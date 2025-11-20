@@ -1,0 +1,11 @@
+{
+  "session_id": "96115fd2-54e9-4cad-bb95-64c1486fae26",
+  "last_updated_at": "2025-11-20T03:26:34.981Z",
+  "messages": [
+    {
+      "role": "user",
+      "content": "今天是几月几号"
+    }
+  ],
+  "last_reply": "今天是 **2024 年 5 月 24 日**，星期五。"
+}

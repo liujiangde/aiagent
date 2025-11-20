@@ -116,19 +116,28 @@ export async function POST(req: NextRequest) {
 
       // 请求 DeepSeek 流式接口
       const t0 = Date.now()
-      const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { role: "system", content: sys },
-            { role: "user", content: user }
-          ],
-          temperature,
-          stream: true
+      let resp: Response
+      try {
+        resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+              { role: "system", content: sys },
+              { role: "user", content: user }
+            ],
+            temperature,
+            stream: true
+          })
         })
-      })
+      } catch (e: any) {
+        send("error", "network_error")
+        send("done", "ok")
+        appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/rag/stream", status: "error", error: e?.message ?? String(e) })
+        controller.close()
+        return
+      }
 
       if (!resp.body) {
         send("error", "no_stream")

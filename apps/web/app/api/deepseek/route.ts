@@ -55,19 +55,25 @@ export async function POST(req: NextRequest) {
   const t0 = Date.now()
   appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "started" })
 
-  const resp = await fetch(DEEPSEEK_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: body?.temperature ?? 0,
-      stream: false
+  let resp: Response
+  try {
+    resp = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: body?.temperature ?? 0,
+        stream: false
+      })
     })
-  })
+  } catch (e: any) {
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: e?.message ?? String(e), duration_ms: Date.now() - t0 })
+    return NextResponse.json({ error: "network_error", detail: e?.message ?? String(e) }, { status: 502 })
+  }
 
   if (!resp.ok) {
     const err = await resp.text().catch(() => "")

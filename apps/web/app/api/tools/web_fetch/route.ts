@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "node:crypto"
-import { appendLog, getSessionIdFromHeaders } from "../../lib/logger"
+import { appendLog, getSessionIdFromHeaders } from "../../../lib/logger"
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as any
@@ -28,6 +28,9 @@ export async function POST(req: NextRequest) {
     const truncated = text.length > maxBytes ? text.slice(0, maxBytes) : text
     appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, type: "tool_run", route: "/api/tools/web_fetch", status: "ok", meta: { status, contentType } })
     return NextResponse.json({ url, status, contentType, text: truncated })
+  } catch (e: any) {
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, type: "tool_run", route: "/api/tools/web_fetch", status: "error", error: e?.message ?? String(e) })
+    return NextResponse.json({ error: "fetch_failed", detail: e?.message ?? String(e) }, { status: 502 })
   } finally {
     clearTimeout(t)
   }

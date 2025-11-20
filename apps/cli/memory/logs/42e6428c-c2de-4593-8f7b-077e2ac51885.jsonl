@@ -1,0 +1,3 @@
+{"ts":"2025-11-20T03:30:57.144Z","app":"cli","session_id":"42e6428c-c2de-4593-8f7b-077e2ac51885","type":"tool_run","status":"error","error":"invalid_tool_call"}
+{"ts":"2025-11-20T03:30:57.146Z","app":"cli","session_id":"42e6428c-c2de-4593-8f7b-077e2ac51885","type":"tool_run","tool":"calc","status":"started"}
+{"ts":"2025-11-20T03:30:57.146Z","app":"cli","session_id":"42e6428c-c2de-4593-8f7b-077e2ac51885","type":"tool_run","tool":"calc","status":"ok","duration_ms":0}

@@ -32,11 +32,17 @@ export async function POST(req: NextRequest) {
   ].join("\n")
   const user = [`问题：${query}`, "片段：", evidence || "(无片段)"].join("\n\n")
 
-  const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: "deepseek-chat", messages: [{ role: "system", content: sys }, { role: "user", content: user }], temperature })
-  })
+  let resp: Response
+  try {
+    resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: "deepseek-chat", messages: [{ role: "system", content: sys }, { role: "user", content: user }], temperature })
+    })
+  } catch (e: any) {
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/rag/kb_answer", status: "error", error: e?.message ?? String(e), duration_ms: Date.now() - t0 })
+    return NextResponse.json({ error: "network_error", detail: e?.message ?? String(e) }, { status: 502 })
+  }
   if (!resp.ok) {
     const err = await resp.text().catch(() => "")
     appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/rag/kb_answer", status: "error", error: err, duration_ms: Date.now() - t0 })

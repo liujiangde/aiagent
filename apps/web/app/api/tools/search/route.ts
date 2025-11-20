@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "node:crypto"
-import { appendLog, getSessionIdFromHeaders } from "../../lib/logger"
+import { appendLog, getSessionIdFromHeaders } from "../../../lib/logger"
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as any
@@ -24,23 +24,33 @@ export async function POST(req: NextRequest) {
       url = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}&rn=${limit}`
       pattern = /<h3[^>]*c-title[^>]*>[\s\S]*?<a[^>]*href=\"([^\"]+)\"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<div[^>]*c-abstract[^>]*>([\s\S]*?)<\/div>/gi
     }
-    const resp = await fetch(url, UA)
-    if (!resp.ok) return [] as Array<{ title: string; url: string; snippet: string }>
-    const html = await resp.text()
-    const items: Array<{ title: string; url: string; snippet: string }> = []
-    let m: RegExpExecArray | null
-    while ((m = pattern.exec(html)) && items.length < limit) {
-      const href = m[1]
-      const title = String(m[2]).replace(/<[^>]+>/g, " ").trim()
-      const snippet = String(m[3]).replace(/<[^>]+>/g, " ").trim()
-      items.push({ title, url: href, snippet })
+    try {
+      const resp = await fetch(url, UA)
+      if (!resp.ok) return [] as Array<{ title: string; url: string; snippet: string }>
+      const html = await resp.text()
+      const items: Array<{ title: string; url: string; snippet: string }> = []
+      let m: RegExpExecArray | null
+      while ((m = pattern.exec(html)) && items.length < limit) {
+        const href = m[1]
+        const title = String(m[2]).replace(/<[^>]+>/g, " ").trim()
+        const snippet = String(m[3]).replace(/<[^>]+>/g, " ").trim()
+        items.push({ title, url: href, snippet })
+      }
+      return items
+    } catch (e: any) {
+      appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, type: "tool_run", route: "/api/tools/search", status: "error", error: e?.message ?? String(e) })
+      return []
     }
-    return items
   }
 
-  let items = await tryHtml("bing")
-  if (items.length === 0) items = await tryHtml("so")
-  if (items.length === 0) items = await tryHtml("baidu")
-  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, type: "tool_run", route: "/api/tools/search", status: "ok", meta: { items_count: items.length } })
-  return NextResponse.json({ query, items })
+  try {
+    let items = await tryHtml("bing")
+    if (items.length === 0) items = await tryHtml("so")
+    if (items.length === 0) items = await tryHtml("baidu")
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, type: "tool_run", route: "/api/tools/search", status: "ok", meta: { items_count: items.length } })
+    return NextResponse.json({ query, items })
+  } catch (e: any) {
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, type: "tool_run", route: "/api/tools/search", status: "error", error: e?.message ?? String(e) })
+    return NextResponse.json({ query, items: [] })
+  }
 }
