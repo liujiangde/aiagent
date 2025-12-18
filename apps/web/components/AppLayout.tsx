@@ -27,7 +27,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </Space>
       </Header>
       <Content style={{ padding: 24 }}>
-        {children}
+        <div>{children}</div>
       </Content>
       <Footer style={{ textAlign: "center" }}>
         © {new Date().getFullYear()} AI Agent Monorepo

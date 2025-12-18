@@ -10,8 +10,6 @@ export default function Page() {
   const [metricsSummary, setMetricsSummary] = useState<any | null>(null)
   const [searchItems, setSearchItems] = useState<Array<{ title: string; url: string; snippet: string }>>([])
   const [fetchResult, setFetchResult] = useState<{ status?: number; contentType?: string; text?: string } | null>(null)
-  const [ragLoading, setRagLoading] = useState(false)
-  const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState("")
   const [sessionId, setSessionId] = useState<string>("")
   const [plannerTrace, setPlannerTrace] = useState<Array<{ step: string; detail?: any; duration_ms?: number }>>([])
@@ -87,127 +85,91 @@ export default function Page() {
             setMessages(next as { role: "user" | "assistant"; content: string }[])
             setText("")
             setLoading(true)
+            setPlannerTrace([])
+            setPlannerMetrics(null)
+            setEnvStatus("")
+            setMetricsSummary(null)
             try {
-              const res = await fetch("/api/deepseek", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "x-session-id": sessionId },
-                body: JSON.stringify({ messages: next, temperature: 0 })
-              })
-              const data = await res.json()
-              const reply = String(data?.content ?? "")
-              setMessages(m => [...m, { role: "assistant", content: reply }])
-            } catch {
-              setMessages(m => [...m, { role: "assistant", content: "调用失败" }])
+              const headers = { "Content-Type": "application/json", "x-session-id": sessionId }
+              const [deep, plan, kb, env, met] = await Promise.allSettled([
+                fetch("/api/deepseek", { method: "POST", headers, body: JSON.stringify({ messages: next, temperature: 0 }) }).then(r => r.json()),
+                fetch("/api/agent/plan_execute", { method: "POST", headers, body: JSON.stringify({ prompt: text }) }).then(r => r.json()),
+                fetch("/api/rag/kb_answer", { method: "POST", headers, body: JSON.stringify({ query: text, k: 5, temperature: 0 }) }).then(r => r.json()),
+                fetch("/api/env-check", { headers: { "x-session-id": sessionId } }).then(r => r.json()),
+                fetch("/api/metrics/summary", { headers: { "x-session-id": sessionId } }).then(r => r.json())
+              ])
+              if (deep.status === "fulfilled") {
+                const reply = String(deep.value?.content ?? "")
+                if (reply) setMessages(m => [...m, { role: "assistant", content: reply }])
+              } else {
+                setMessages(m => [...m, { role: "assistant", content: "调用失败" }])
+              }
+              if (plan.status === "fulfilled") {
+                const dj = plan.value
+                setPlannerTrace(Array.isArray(dj?.trace) ? dj.trace : [])
+                setPlannerMetrics(dj?.metrics ?? null)
+                const reply = String(dj?.final_answer ?? "")
+                if (reply) setMessages(m => [...m, { role: "assistant", content: reply }])
+              }
+              if (kb.status === "fulfilled") {
+                const data = kb.value
+                setSearchItems(Array.isArray(data?.items) ? data.items : [])
+                const reply = String(data?.answer ?? "")
+                if (reply) setMessages(m => [...m, { role: "assistant", content: reply }])
+              }
+              if (env.status === "fulfilled") {
+                const data = env.value
+                setEnvStatus(`密钥存在: ${data.hasKey ? "是" : "否"}，长度: ${data.length}`)
+              }
+              if (met.status === "fulfilled") setMetricsSummary(met.value)
+              try {
+                const res = await fetch("/api/rag/stream", { method: "POST", headers, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
+                if (!res.body) throw new Error("no_stream")
+                const reader = res.body.getReader()
+                const decoder = new TextDecoder()
+                let buf = ""
+                let acc = ""
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done) break
+                  buf += decoder.decode(value, { stream: true })
+                  const parts = buf.split("\n\n")
+                  buf = parts.pop() || ""
+                  for (const part of parts) {
+                    const lines = part.split("\n").filter(Boolean)
+                    let ev = "message"
+                    let ds = ""
+                    for (const line of lines) {
+                      if (line.startsWith("event:")) ev = line.slice(6).trim()
+                      if (line.startsWith("data:")) ds = line.slice(5).trim()
+                    }
+                    if (ev === "citations") {
+                      try {
+                        const j = JSON.parse(ds)
+                        setSearchItems(Array.isArray(j?.items) ? j.items : [])
+                      } catch {}
+                    } else if (ev === "token") {
+                      acc += ds
+                      setStreamText(acc)
+                    } else if (ev === "done") {
+                    }
+                  }
+                }
+                if (acc) setMessages(m => [...m, { role: "assistant", content: acc }])
+              } catch {
+              }
             } finally {
               setLoading(false)
             }
           }}
         >发送</AntButton>
 
-        {/* 规划执行：调用 /api/agent/plan_execute，返回最终回答与轨迹/指标 */}
-        <AntButton onClick={async () => {
-          const q = text.trim()
-          if (!q) return
-          setLoading(true)
-          setPlannerTrace([])
-          setPlannerMetrics(null)
-          try {
-            const res = await fetch("/api/agent/plan_execute", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ prompt: q }) })
-            const dj = await res.json()
-            const reply = String(dj?.final_answer ?? "")
-            setMessages(m => [...m, { role: "assistant", content: reply }])
-            setPlannerTrace(Array.isArray(dj?.trace) ? dj.trace : [])
-            setPlannerMetrics(dj?.metrics ?? null)
-          } catch {
-            setMessages(m => [...m, { role: "assistant", content: "规划执行失败" }])
-          } finally {
-            setLoading(false)
-          }
-        }}>规划执行</AntButton>
+        
 
-        <AntButton loading={ragLoading} onClick={async () => {
-          if (!text.trim()) return
-          setRagLoading(true)
-          autoSearchAndFetch(text).catch(() => {})
-          try {
-            const res = await fetch("/api/rag/kb_answer", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, k: 5, temperature: 0 }) })
-            const data = await res.json()
-            setSearchItems(Array.isArray(data?.items) ? data.items : [])
-            const reply = String(data?.answer ?? "")
-            setMessages(m => [...m, { role: "assistant", content: reply }])
-          } catch {
-            setMessages(m => [...m, { role: "assistant", content: "知识库回答失败" }])
-          } finally {
-            setRagLoading(false)
-          }
-        }}>知识库回答</AntButton>
-        <AntButton loading={streaming} onClick={async () => {
-          if (!text.trim()) return
-          setStreaming(true)
-          setStreamText("")
-          autoSearchAndFetch(text).catch(() => {})
-          try {
-            const res = await fetch("/api/rag/stream", { method: "POST", headers: { "Content-Type": "application/json", "x-session-id": sessionId }, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
-            if (!res.body) throw new Error("no_stream")
-            const reader = res.body.getReader()
-            const decoder = new TextDecoder()
-            let buf = ""
-            let acc = ""
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
-              buf += decoder.decode(value, { stream: true })
-              const parts = buf.split("\n\n")
-              buf = parts.pop() || ""
-              for (const part of parts) {
-                const lines = part.split("\n").filter(Boolean)
-                let ev = "message"
-                let ds = ""
-                for (const line of lines) {
-                  if (line.startsWith("event:")) ev = line.slice(6).trim()
-                  if (line.startsWith("data:")) ds = line.slice(5).trim()
-                }
-                if (ev === "citations") {
-                  try {
-                    const j = JSON.parse(ds)
-                    setSearchItems(Array.isArray(j?.items) ? j.items : [])
-                  } catch {}
-                } else if (ev === "token") {
-                  acc += ds
-                  setStreamText(acc)
-                } else if (ev === "done") {
-                  setStreaming(false)
-                }
-              }
-            }
-            setStreaming(false)
-            if (acc) setMessages(m => [...m, { role: "assistant", content: acc }])
-          } catch {
-            setStreaming(false)
-          }
-        }}>检索回答(流式)</AntButton>
-        <AntButton onClick={async () => {
-          try {
-            // 向 /api/env-check 发送 GET 请求，检查服务器端是否已配置 API 密钥
-            // 发起 GET 请求到 /api/env-check 接口，获取环境变量检查信息
-            // 临时硬编码，后续需在 apps/web/app/api 下新增 env-check/route.ts 提供该接口
-            const res = await fetch("/api/env-check", { headers: { "x-session-id": sessionId } })
-            const data = await res.json()
-            setEnvStatus(`密钥存在: ${data.hasKey ? "是" : "否"}，长度: ${data.length}`)
-          } catch {
-            setEnvStatus("检查失败")
-          }
-        }}>检查API密钥</AntButton>
-        {/* 指标汇总：调用 /api/metrics/summary 展示统计 */}
-        <AntButton onClick={async () => {
-          try {
-            const res = await fetch("/api/metrics/summary", { headers: { "x-session-id": sessionId } })
-            const dj = await res.json()
-            setMetricsSummary(dj)
-          } catch {
-            setMetricsSummary({ error: "metrics_fetch_failed" })
-          }
-        }}>指标汇总</AntButton>
+        
+        
+        
+        
       </div>
       <div style={{ marginTop: 16 }}>
         <div>会话：</div>
