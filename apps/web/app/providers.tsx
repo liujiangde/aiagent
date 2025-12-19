@@ -41,7 +41,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <StyleProvider hashPriority="high">
       <ThemeContext.Provider value={value}>
         <ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
-          {children}
+          <>{children}</>
         </ConfigProvider>
       </ThemeContext.Provider>
     </StyleProvider>

@@ -2,20 +2,33 @@
 import React, { useEffect, useState } from "react"
 import { Button as AntButton, Input, List, Spin } from "antd"
 
+/** 页面主组件：集成检索、网页抓取、规划执行、流式回答与指标展示 */
 export default function Page() {
+  // 输入框内容
   const [text, setText] = useState("")
+  // 会话消息（用户与助手）
   const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([])
+  // 发送中状态
   const [loading, setLoading] = useState(false)
+  // 环境密钥检查文案
   const [envStatus, setEnvStatus] = useState<string>("")
+  // 指标汇总（后端返回的聚合信息）
   const [metricsSummary, setMetricsSummary] = useState<any | null>(null)
+  // 搜索或RAG返回的引用项
   const [searchItems, setSearchItems] = useState<Array<{ title: string; url: string; snippet: string }>>([])
+  // 网页抓取结果
   const [fetchResult, setFetchResult] = useState<{ status?: number; contentType?: string; text?: string } | null>(null)
+  // RAG流式回答的累积文本
   const [streamText, setStreamText] = useState("")
+  // 会话ID（用于在前后端关联操作）
   const [sessionId, setSessionId] = useState<string>("")
+  // 规划执行的步骤轨迹
   const [plannerTrace, setPlannerTrace] = useState<Array<{ step: string; detail?: any; duration_ms?: number }>>([])
+  // 规划执行的指标数据
   const [plannerMetrics, setPlannerMetrics] = useState<Record<string, any> | null>(null)
 
   useEffect(() => {
+    // 初始化并持久化一个会话ID，便于后端按会话识别请求
     const k = "__session_id__"
     let sid = localStorage.getItem(k) || ""
     if (!sid) {
@@ -26,6 +39,7 @@ export default function Page() {
   }, [])
 
   async function autoSearchAndFetch(input: string) {
+    // 根据用户输入：若是URL则直接抓取，否则先检索再抓取首条结果
     const q = input.trim()
     if (!q) return
     let asUrl: string | null = null
@@ -80,7 +94,9 @@ export default function Page() {
           loading={loading}
           onClick={async () => {
             if (!text.trim()) return
+            // 触发自动检索/抓取以补充上下文
             autoSearchAndFetch(text).catch(() => {})
+            // 更新会话并清理状态
             const next = [...messages, { role: "user", content: text }]
             setMessages(next as { role: "user" | "assistant"; content: string }[])
             setText("")
@@ -91,6 +107,12 @@ export default function Page() {
             setMetricsSummary(null)
             try {
               const headers = { "Content-Type": "application/json", "x-session-id": sessionId }
+              // 并发调用：
+              // - /api/deepseek：通用LLM回答
+              // - /api/agent/plan_execute：规划执行器（返回轨迹与最终答案）
+              // - /api/rag/kb_answer：RAG静态回答与引用
+              // - /api/env-check：环境密钥存在性检查
+              // - /api/metrics/summary：指标汇总
               const [deep, plan, kb, env, met] = await Promise.allSettled([
                 fetch("/api/deepseek", { method: "POST", headers, body: JSON.stringify({ messages: next, temperature: 0 }) }).then(r => r.json()),
                 fetch("/api/agent/plan_execute", { method: "POST", headers, body: JSON.stringify({ prompt: text }) }).then(r => r.json()),
@@ -123,6 +145,10 @@ export default function Page() {
               }
               if (met.status === "fulfilled") setMetricsSummary(met.value)
               try {
+                // 触发RAG流式接口，解析SSE事件：
+                // - event: citations => 更新引用列表
+                // - event: token => 累积并展示生成中的文本
+                // - event: done   => 完成
                 const res = await fetch("/api/rag/stream", { method: "POST", headers, body: JSON.stringify({ query: text, limit: 5, temperature: 0 }) })
                 if (!res.body) throw new Error("no_stream")
                 const reader = res.body.getReader()
@@ -152,13 +178,17 @@ export default function Page() {
                       acc += ds
                       setStreamText(acc)
                     } else if (ev === "done") {
+                      // 流式结束
                     }
                   }
                 }
+                // 将最终流式内容也写入会话
                 if (acc) setMessages(m => [...m, { role: "assistant", content: acc }])
               } catch {
+                // 流式过程失败时忽略错误，避免影响主流程
               }
             } finally {
+              // 无论成功与否，恢复loading状态
               setLoading(false)
             }
           }}

@@ -1,12 +1,20 @@
 "use client"
 import React from "react"
 import { Layout, Menu, Switch, Space, Typography } from "antd"
+import { useRouter, usePathname } from "next/navigation"
 import { useTheme } from "../app/providers"
 
 const { Header, Content, Footer } = Layout
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { dark, toggle } = useTheme()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const activeKey = (() => {
+    if (pathname?.startsWith("/agent1")) return "agent1"
+    return "home"
+  })()
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -15,9 +23,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Menu
           theme="dark"
           mode="horizontal"
+          selectedKeys={[activeKey]}
+          onClick={({ key }) => {
+            if (key === "home") router.push("/")
+            else if (key === "agent1") router.push("/agent1")
+          }}
           items={[
             { key: "home", label: "首页" },
-            { key: "docs", label: "文档" }
+            { key: "agent1", label: "智能体1" }
           ]}
           style={{ flex: 1 }}
         />
