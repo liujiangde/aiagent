@@ -5,7 +5,7 @@
  *
  * 路径与方法：
  * - GET /api/deepseek    返回密钥是否存在：{ hasKey: boolean }
- * - POST /api/deepseek   代理对话请求，返回模型与文本：{ model: string, content: string }
+ * - POST /api/deepseek   代理对话请求，支持流式传输
  *
  * 环境变量：
  * - DEEPSEEK_API_KEY     DeepSeek 平台的 API Key，仅服务器端读取
@@ -15,6 +15,7 @@
  *   model?: string                // 默认 "deepseek-chat"
  *   messages: Array<{ role: "user"|"system"|"assistant", content: string }>
  *   temperature?: number          // 默认 0
+ *   stream?: boolean              // 是否开启流式传输，默认 false
  * }
  *
  * 错误语义：
@@ -41,7 +42,7 @@ export async function GET() {
 }
 
 /**
- * 对话代理：将请求体转发至 DeepSeek Chat Completions，并返回文本内容
+ * 对话代理：将请求体转发至 DeepSeek Chat Completions
  */
 export async function POST(req: NextRequest) {
   const apiKey = process.env.DEEPSEEK_API_KEY
@@ -50,10 +51,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as any
   const messages = body?.messages ?? [{ role: "user", content: "Hello" }]
   const model = body?.model ?? "deepseek-chat"
+  const stream = !!body?.stream
   const sessionId = getSessionIdFromHeaders(req.headers) || crypto.randomUUID()
   const reqId = crypto.randomUUID()
   const t0 = Date.now()
-  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "started" })
+  appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "started", stream })
 
   let resp: Response
   try {
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
         model,
         messages,
         temperature: body?.temperature ?? 0,
-        stream: false
+        stream
       })
     })
   } catch (e: any) {
@@ -79,6 +81,45 @@ export async function POST(req: NextRequest) {
     const err = await resp.text().catch(() => "")
     appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: err, duration_ms: Date.now() - t0 })
     return NextResponse.json({ error: "upstream_error", detail: err }, { status: 502 })
+  }
+
+  if (stream) {
+    // 创建一个 TransformStream 来处理流式响应
+    const encoder = new TextEncoder()
+    const decoder = new TextDecoder()
+    let buffer = ""
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        if (!resp.body) return controller.close()
+        const reader = resp.body.getReader()
+        
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            
+            const chunk = decoder.decode(value, { stream: true })
+            // 简单透传 chunk，客户端负责解析 SSE 格式
+            controller.enqueue(encoder.encode(chunk))
+            buffer += chunk
+          }
+          appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "assistant_reply", route: "/api/deepseek", model, status: "ok", duration_ms: Date.now() - t0, stream: true })
+        } catch (e) {
+          controller.error(e)
+        } finally {
+          controller.close()
+        }
+      }
+    })
+
+    return new NextResponse(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      }
+    })
   }
 
   const data = await resp.json()
