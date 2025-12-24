@@ -13,6 +13,7 @@ dotenv.config()
 
 // 创建 Fastify 实例，开启日志记录
 const fastify = Fastify({
+  // 这个配置用于开启 Fastify 的日志记录，会输出请求、响应及错误等信息，便于调试与监控
   logger: true
 })
 
