@@ -6,10 +6,10 @@ import cors from '@fastify/cors'
 // 引入环境变量配置
 import dotenv from 'dotenv'
 // 引入自定义端口获取函数
-import { getPort } from './env'
+import { getPort, loadEnv } from './env'
+import { registerDeepseekSSE } from './deepseek-sse'
 
-// 加载 .env 文件中的环境变量
-dotenv.config()
+loadEnv()
 
 // 创建 Fastify 实例，开启日志记录
 const fastify = Fastify({
@@ -31,6 +31,8 @@ fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
 fastify.get('/health', async (request: FastifyRequest, reply: FastifyReply) => {
   return { status: 'ok', timestamp: new Date().toISOString() }
 })
+
+await registerDeepseekSSE(fastify)
 
 // 启动服务的异步函数
 const start = async () => {
