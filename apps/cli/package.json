@@ -8,9 +8,12 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@aiagent/tools": "workspace:*"
+    "@aiagent/tools": "workspace:*",
+    "undici": "^7.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "@types/node": "^20.10.0",
+    "@aiagent/tsconfig": "workspace:*"
   }
 }

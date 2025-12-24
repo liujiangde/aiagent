@@ -1,8 +1,8 @@
 import readline from "node:readline"
 import crypto from "node:crypto"
 import { append as logAppend, ensureSessionLog } from "./logger"
-const toolsMod = require("../../../packages/tools/dist/index.js")
-const { builtinTools, executeTool, parseToolCall, toolSystemPrompt } = toolsMod
+import { builtinTools, executeTool, parseToolCall, toolSystemPrompt } from "@aiagent/tools"
+import { fetch } from "undici"
 
 // 定义聊天消息的类型，角色可以是 user、system 或 assistant
 type ChatMessage = { role: "user" | "system" | "assistant"; content: string }
@@ -29,8 +29,9 @@ async function callDeepseek(messages: ChatMessage[], model = "deepseek-chat", te
     const txt = await resp.text().catch(() => "")
     throw new Error(`upstream_error: ${txt}`)
   }
-  const data = await resp.json()
-  const content = data?.choices?.[0]?.message?.content ?? ""
+  type DeepseekResponse = { choices?: Array<{ message?: { content?: string } }> }
+  const data = (await resp.json()) as DeepseekResponse
+  const content = data.choices?.[0]?.message?.content ?? ""
   return content as string
 }
 
