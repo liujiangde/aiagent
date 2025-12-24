@@ -1,2 +1,0 @@
-{"ts":"2025-11-20T03:31:04.398Z","app":"cli","session_id":"15055911-dabf-4e02-9fc9-9472fa0b31d3","type":"tool_run","tool":"read_file","status":"started"}
-{"ts":"2025-11-20T03:31:04.399Z","app":"cli","session_id":"15055911-dabf-4e02-9fc9-9472fa0b31d3","type":"tool_run","tool":"read_file","status":"ok","duration_ms":1}

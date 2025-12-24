@@ -42,3 +42,6 @@ apps/*/.env.local
 # Local dev data
 .data/
 apps/web/.data/
+apps/cli/memory/logs/
+apps/memory/logs/
+.turbo/
