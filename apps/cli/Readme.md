@@ -4,8 +4,8 @@
 - 提供最小可用的命令行 Agent：历史上下文对话、工具调用闭环与本地 JSONL 日志记录。
 
 运行
-- 构建：`npm run build -w apps/cli`
-- 启动：`npm run start -w apps/cli`
+- 构建：`pnpm --filter cli build`
+- 启动：`pnpm --filter cli start`
 
 使用
 - 输入用户消息直接对话；输入 `/exit` 退出
@@ -19,3 +19,4 @@
 
 环境变量
 - `DEEPSEEK_API_KEY`：调用模型时所需；未配置则对话调用会报错
+- 示例环境文件：参考 `apps/web/.env.example:1-2`

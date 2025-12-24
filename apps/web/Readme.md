@@ -20,7 +20,13 @@
 - 会话快照：`apps/web/.data/web/sessions/<sessionId>.json`
 
 开发运行
-- `npm run dev -w apps/web` 打开 `http://localhost:3000/`
+- `pnpm --filter web dev` 打开 `http://localhost:3000/`
+- 或在根执行 `pnpm run dev`（Turbo 执行 web 及依赖）
+
+环境变量
+- 在 `apps/web/.env.local` 设置 `DEEPSEEK_API_KEY=你的密钥`
+- 示例文件为占位：`apps/web/.env.example:1-2`
+- 校验接口：`GET /api/env-check` 返回 `{ ok, missing, keys }`
 
 安全说明
 - API Key 仅在服务端读取；日志中不记录敏感信息；长文本做安全截断

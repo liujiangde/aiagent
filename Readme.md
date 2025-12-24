@@ -1,6 +1,6 @@
-启动前端（单应用）：在根目录执行 npm run dev -w apps/web
-启动整个工作区（并行管线）：在根目录执行 npm run dev
-启动 CLI 助手：先构建 npm run build -w apps/cli ，然后运行 npm run start -w apps/cli
+启动前端（单应用）：在根目录执行 pnpm --filter web dev
+启动整个工作区（并行管线）：在根目录执行 pnpm run dev
+启动 CLI 助手：先构建 pnpm --filter cli build ，然后运行 pnpm --filter cli start
 
 ## 常用命令说明
 
@@ -79,3 +79,8 @@
 - 测试扩展：为 `api/rag/*` 与 `api/deepseek` 增加集成测试与错误路径覆盖；考虑加入 E2E。
 - 部署标准化：添加 Web/BFF 的生产 `Dockerfile` 与 Compose，并在 CI 中集成镜像构建。
 - 可观测性：抽象日志接口以支持外部后端，并统一记录关键路由耗时与错误。
+
+## 文档索引
+- 启动与环境校验运行手册：`.trae/documents/启动与环境校验运行手册.md`
+- 模块启动说明：`.trae/documents/模块启动说明.md`
+- 架构优化变更记录：`.trae/documents/架构优化变更记录.md`
