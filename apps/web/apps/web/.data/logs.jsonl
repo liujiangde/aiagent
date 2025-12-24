@@ -1,2 +1,0 @@
-{"ts":"2025-11-20T03:13:20.953Z","app":"web","session_id":"test-session","type":"api_call","route":"/api/kb/add_text","status":"started","meta":{"title_len":4,"text_len":16}}
-{"ts":"2025-11-20T03:13:20.955Z","app":"web","session_id":"test-session","type":"assistant_reply","route":"/api/kb/add_text","status":"ok","meta":{"added":1}}
