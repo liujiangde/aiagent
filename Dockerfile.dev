@@ -1,3 +1,4 @@
 FROM node:20
 WORKDIR /app
-CMD ["sh", "-c", "npm ci && npm run dev -w apps/web"]
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+CMD ["sh", "-c", "pnpm install --frozen-lockfile && pnpm run dev -w apps/web"]

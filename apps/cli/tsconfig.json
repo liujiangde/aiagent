@@ -7,9 +7,6 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "skipLibCheck": true,
-    "paths": {
-      "@aiagent/tools": ["../../packages/tools/src/index.ts"]
-    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"]

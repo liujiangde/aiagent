@@ -7,7 +7,8 @@ import fs from "node:fs"
 import path from "node:path"
 
 // 统一在仓库根目录下创建 .data/web 用于开发环境持久化
-const DATA_DIR = path.resolve(process.cwd(), ".data/web")
+const ROOT = process.env.LOG_ROOT && process.env.LOG_ROOT.trim().length > 0 ? process.env.LOG_ROOT : process.cwd()
+const DATA_DIR = path.resolve(ROOT, ".data/web")
 const LOG_FILE = path.resolve(DATA_DIR, "logs.jsonl")
 const SESS_DIR = path.resolve(DATA_DIR, "sessions")
 

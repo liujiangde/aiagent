@@ -2,14 +2,6 @@
   "extends": "@aiagent/tsconfig/tsconfig.json",
   "compilerOptions": {
     "jsx": "preserve",
-    "paths": {
-      "@aiagent/ui": [
-        "../../packages/ui/src/index.ts"
-      ],
-      "@aiagent/retrieval": [
-        "../../packages/retrieval/src/index.ts"
-      ]
-    },
     "allowJs": true,
     "incremental": true,
     "plugins": [

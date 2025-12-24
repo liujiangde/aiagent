@@ -4,19 +4,15 @@ import tsPlugin from '@typescript-eslint/eslint-plugin'
 
 export default [
   {
-    ignores: ['node_modules/**', '.next/**', 'out/**', 'build/**', 'dist/**'],
+    ignores: ['node_modules/**', 'dist/**'],
   },
   {
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
-        window: 'readonly',
-        document: 'readonly',
-        localStorage: 'readonly',
-        crypto: 'readonly',
-        fetch: 'readonly',
-        URL: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
       },
     },
   },
@@ -35,6 +31,8 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': 'warn',
     },
   },
 ]

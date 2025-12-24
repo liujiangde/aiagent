@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import crypto from "node:crypto"
 import { appendLog, getSessionIdFromHeaders } from "../../../lib/logger"
+import { getDeepseekKey } from "../../../lib/env"
 
 /**
  * 根据关键词从搜索引擎抓取 HTML 结果
@@ -63,7 +64,7 @@ async function searchHtml(query: string, limit: number) {
  */
 export async function POST(req: NextRequest) {
   // 检查环境变量
-  const apiKey = process.env.DEEPSEEK_API_KEY
+  const apiKey = getDeepseekKey()
   if (!apiKey)
     return new Response(JSON.stringify({ error: "DEEPSEEK_API_KEY missing" }), {
       status: 400,

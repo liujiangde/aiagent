@@ -3,7 +3,10 @@
   "compilerOptions": {
     "outDir": "dist",
     "module": "CommonJS",
-    "moduleResolution": "Node"
+    "moduleResolution": "Node",
+    "declaration": true,
+    "types": ["node"],
+    "lib": ["ES2020"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"]

@@ -10,6 +10,7 @@ packages/**/node_modules
 .env.*
 apps/*/.env
 apps/*/.env.*
+apps/*/.env.local
 # # Secrets & keys
 # *.pem
 # *.key
@@ -37,3 +38,7 @@ apps/*/.env.*
 # **/.next
 # coverage/
 # .vercel
+ 
+# Local dev data
+.data/
+apps/web/.data/

@@ -26,6 +26,7 @@
  * - 切勿在客户端代码中读取或下发 `DEEPSEEK_API_KEY`；该路由仅在服务器端访问环境变量。
  */
 import { NextRequest, NextResponse } from "next/server"
+import { getDeepseekKey } from "../../lib/env"
 import crypto from "node:crypto"
 import { appendLog, writeSessionSnapshot, getSessionIdFromHeaders } from "../../lib/logger"
 
@@ -35,7 +36,7 @@ const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
  * 健康检查：返回是否已配置密钥
  */
 export async function GET() {
-  const key = process.env.DEEPSEEK_API_KEY
+  const key = getDeepseekKey()
   const hasKey = !!key && key.trim().length > 0
   appendLog({ ts: new Date().toISOString(), app: "web", type: "api_call", route: "/api/deepseek", method: "GET", status: "ok" })
   return NextResponse.json({ hasKey })
@@ -45,7 +46,7 @@ export async function GET() {
  * 对话代理：将请求体转发至 DeepSeek Chat Completions
  */
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.DEEPSEEK_API_KEY
+  const apiKey = getDeepseekKey()
   if (!apiKey) return NextResponse.json({ error: "DEEPSEEK_API_KEY missing" }, { status: 400 })
 
   const body = await req.json().catch(() => ({})) as any

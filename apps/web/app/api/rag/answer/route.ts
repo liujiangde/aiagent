@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import crypto from "node:crypto"
 import { appendLog, getSessionIdFromHeaders } from "../../../lib/logger"
+import { getDeepseekKey } from "../../../lib/env"
 
 async function searchHtml(query: string, limit: number) {
   async function tryHtml(source: "bing" | "so" | "baidu") {
@@ -41,7 +42,7 @@ async function searchHtml(query: string, limit: number) {
 }
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.DEEPSEEK_API_KEY
+  const apiKey = getDeepseekKey()
   if (!apiKey) return NextResponse.json({ error: "DEEPSEEK_API_KEY missing" }, { status: 400 })
   const body = await req.json().catch(() => ({})) as any
   const query = String(body?.query ?? "").trim()

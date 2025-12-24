@@ -7,7 +7,9 @@
     "resolveJsonModule": true,
     "allowJs": false,
     "skipLibCheck": true,
-    "declaration": true
+    "declaration": true,
+    "types": ["node"],
+    "lib": ["ES2020"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"]

@@ -10,9 +10,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "lint": "turbo run lint"
+    "dev": "turbo run dev --filter=web --include-dependencies",
+    "build": "turbo run build --filter=./apps/* --filter=./packages/*",
+    "lint": "turbo run lint --filter=./apps/* --filter=./packages/*",
+    "test": "turbo run test --filter=./apps/* --filter=./packages/*",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.50.0",
@@ -20,6 +23,7 @@
     "eslint": "^9.12.0",
     "prettier": "^3.3.3",
     "turbo": "^1.13.3",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
   }
 }

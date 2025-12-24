@@ -10,6 +10,9 @@
     },
     "lint": {
       "cache": false
+    },
+    "test": {
+      "cache": false
     }
   }
 }
