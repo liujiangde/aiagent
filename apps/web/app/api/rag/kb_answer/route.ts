@@ -7,11 +7,9 @@ import { NextRequest, NextResponse } from "next/server"
 import * as kb from "@aiagent/retrieval"
 import crypto from "node:crypto"
 import { appendLog, getSessionIdFromHeaders } from "../../../lib/logger"
-import { getDeepseekKey } from "../../../lib/env"
+import { getBffUrl } from "../../../lib/env"
 
 export async function POST(req: NextRequest) {
-  const apiKey = getDeepseekKey()
-  if (!apiKey) return NextResponse.json({ error: "DEEPSEEK_API_KEY missing" }, { status: 400 })
   const body = await req.json().catch(() => ({})) as any
   const query = String(body?.query ?? "").trim()
   const k = Math.max(1, Math.min(10, Number(body?.k ?? 5)))
@@ -33,11 +31,12 @@ export async function POST(req: NextRequest) {
   ].join("\n")
   const user = [`问题：${query}`, "片段：", evidence || "(无片段)"].join("\n\n")
 
+  const bff = getBffUrl()
   let resp: Response
   try {
-    resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    resp = await fetch(`${bff}/deepseek/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model: "deepseek-chat", messages: [{ role: "system", content: sys }, { role: "user", content: user }], temperature })
     })
   } catch (e: any) {
@@ -50,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "upstream_error", detail: err }, { status: 502 })
   }
   const data = await resp.json()
-  const answer = data?.choices?.[0]?.message?.content ?? ""
+  const answer = data?.content ?? ""
   appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "assistant_reply", route: "/api/rag/kb_answer", status: "ok", duration_ms: Date.now() - t0, meta: { items_count: items.length } })
   return NextResponse.json({ query, items, answer })
 }

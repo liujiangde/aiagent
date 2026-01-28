@@ -8,6 +8,11 @@ export function getDeepseekKey() {
   return getEnv("DEEPSEEK_API_KEY")
 }
 
+export function getBffUrl() {
+  const v = getEnv("BFF_URL")
+  return v || "http://localhost:4010"
+}
+
 export function validateRequired(keys: string[]) {
   const missing = keys.filter((k) => getEnv(k).length === 0)
   return { ok: missing.length === 0, missing }

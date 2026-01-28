@@ -26,7 +26,7 @@
  * - 切勿在客户端代码中读取或下发 `DEEPSEEK_API_KEY`；该路由仅在服务器端访问环境变量。
  */
 import { NextRequest, NextResponse } from "next/server"
-import { getDeepseekKey } from "../../lib/env"
+import { getBffUrl } from "../../lib/env"
 import crypto from "node:crypto"
 import { appendLog, writeSessionSnapshot, getSessionIdFromHeaders } from "../../lib/logger"
 
@@ -36,19 +36,22 @@ const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
  * 健康检查：返回是否已配置密钥
  */
 export async function GET() {
-  const key = getDeepseekKey()
-  const hasKey = !!key && key.trim().length > 0
-  appendLog({ ts: new Date().toISOString(), app: "web", type: "api_call", route: "/api/deepseek", method: "GET", status: "ok" })
-  return NextResponse.json({ hasKey })
+  const bff = getBffUrl()
+  try {
+    const resp = await fetch(`${bff}/deepseek/key_check`)
+    const data = await resp.json().catch(() => ({ hasKey: false }))
+    appendLog({ ts: new Date().toISOString(), app: "web", type: "api_call", route: "/api/deepseek", method: "GET", status: "ok" })
+    return NextResponse.json({ hasKey: !!data?.hasKey })
+  } catch {
+    appendLog({ ts: new Date().toISOString(), app: "web", type: "api_call", route: "/api/deepseek", method: "GET", status: "error" })
+    return NextResponse.json({ hasKey: false }, { status: 200 })
+  }
 }
 
 /**
  * 对话代理：将请求体转发至 DeepSeek Chat Completions
  */
 export async function POST(req: NextRequest) {
-  const apiKey = getDeepseekKey()
-  if (!apiKey) return NextResponse.json({ error: "DEEPSEEK_API_KEY missing" }, { status: 400 })
-
   const body = await req.json().catch(() => ({})) as any
   const messages = body?.messages ?? [{ role: "user", content: "Hello" }]
   const model = body?.model ?? "deepseek-chat"
@@ -58,33 +61,21 @@ export async function POST(req: NextRequest) {
   const t0 = Date.now()
   appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "started", stream })
 
-  let resp: Response
-  try {
-    resp = await fetch(DEEPSEEK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: body?.temperature ?? 0,
-        stream
-      })
-    })
-  } catch (e: any) {
-    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: e?.message ?? String(e), duration_ms: Date.now() - t0 })
-    return NextResponse.json({ error: "network_error", detail: e?.message ?? String(e) }, { status: 502 })
-  }
-
-  if (!resp.ok) {
-    const err = await resp.text().catch(() => "")
-    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: err, duration_ms: Date.now() - t0 })
-    return NextResponse.json({ error: "upstream_error", detail: err }, { status: 502 })
-  }
-
   if (stream) {
+    const bff = getBffUrl()
+    const lastUser = messages.reverse().find((m: any) => m?.role === "user")?.content ?? ""
+    let resp: Response
+    try {
+      resp = await fetch(`${bff}/deepseek/sse?q=${encodeURIComponent(String(lastUser))}`)
+    } catch (e: any) {
+      appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: e?.message ?? String(e), duration_ms: Date.now() - t0 })
+      return NextResponse.json({ error: "network_error", detail: e?.message ?? String(e) }, { status: 502 })
+    }
+    if (!resp.ok) {
+      const err = await resp.text().catch(() => "")
+      appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: err, duration_ms: Date.now() - t0 })
+      return NextResponse.json({ error: "upstream_error", detail: err }, { status: 502 })
+    }
     // 创建一个 TransformStream 来处理流式响应
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
@@ -123,8 +114,25 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const data = await resp.json()
-  const content = data?.choices?.[0]?.message?.content ?? ""
+  const bff = getBffUrl()
+  let resp2: Response
+  try {
+    resp2 = await fetch(`${bff}/deepseek/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages, temperature: body?.temperature ?? 0 })
+    })
+  } catch (e: any) {
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: e?.message ?? String(e), duration_ms: Date.now() - t0 })
+    return NextResponse.json({ error: "network_error", detail: e?.message ?? String(e) }, { status: 502 })
+  }
+  if (!resp2.ok) {
+    const err = await resp2.text().catch(() => "")
+    appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "api_call", route: "/api/deepseek", model, status: "error", error: err, duration_ms: Date.now() - t0 })
+    return NextResponse.json({ error: "upstream_error", detail: err }, { status: 502 })
+  }
+  const data = await resp2.json()
+  const content = data?.content ?? ""
   appendLog({ ts: new Date().toISOString(), app: "web", session_id: sessionId, request_id: reqId, type: "assistant_reply", route: "/api/deepseek", model, status: "ok", duration_ms: Date.now() - t0 })
   writeSessionSnapshot(sessionId, { last_updated_at: new Date().toISOString(), messages, last_reply: content })
   return NextResponse.json({ model, content })

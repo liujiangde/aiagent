@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import crypto from "node:crypto"
 import { appendLog, getSessionIdFromHeaders } from "../../../lib/logger"
-import { getDeepseekKey } from "../../../lib/env"
+import { getBffUrl } from "../../../lib/env"
 
 /**
  * 根据关键词从搜索引擎抓取 HTML 结果
@@ -63,14 +63,6 @@ async function searchHtml(query: string, limit: number) {
  * 接收 { query, limit, temperature } 返回 SSE 流
  */
 export async function POST(req: NextRequest) {
-  // 检查环境变量
-  const apiKey = getDeepseekKey()
-  if (!apiKey)
-    return new Response(JSON.stringify({ error: "DEEPSEEK_API_KEY missing" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" }
-    })
-
   // 解析请求体
   const body = (await req.json().catch(() => ({}))) as any
   const query = String(body?.query ?? "").trim()
@@ -115,23 +107,13 @@ export async function POST(req: NextRequest) {
       // 先推送引用列表
       send("citations", { items })
 
-      // 请求 DeepSeek 流式接口
+      // 请求 BFF 流式接口（Deepseek SSE 代理）
       const t0 = Date.now()
       let resp: Response
       try {
-        resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model: "deepseek-chat",
-            messages: [
-              { role: "system", content: sys },
-              { role: "user", content: user }
-            ],
-            temperature,
-            stream: true
-          })
-        })
+        const bff = getBffUrl()
+        // 简化：直接传 user 合成的提示词到 SSE
+        resp = await fetch(`${bff}/deepseek/sse?q=${encodeURIComponent(user)}`)
       } catch (e: any) {
         send("error", "network_error")
         send("done", "ok")
@@ -174,8 +156,7 @@ export async function POST(req: NextRequest) {
                 return
               } else {
                 try {
-                  const j = JSON.parse(ds)
-                  const token = j?.choices?.[0]?.delta?.content
+                  const token = JSON.parse(ds)
                   if (typeof token === "string" && token.length > 0) send("token", token)
                 } catch {
                   // 忽略非 JSON 行

@@ -8,6 +8,7 @@ import dotenv from 'dotenv'
 // 引入自定义端口获取函数
 import { getPort, loadEnv } from './env'
 import { registerDeepseekSSE } from './deepseek-sse'
+import { registerDeepseekChat } from './deepseek-chat'
 
 loadEnv()
 
@@ -33,6 +34,7 @@ fastify.get('/health', async (request: FastifyRequest, reply: FastifyReply) => {
 })
 
 await registerDeepseekSSE(fastify)
+await registerDeepseekChat(fastify)
 
 // 启动服务的异步函数
 const start = async () => {
